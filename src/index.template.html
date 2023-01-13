@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html <% _(htmlAttributes).each(function(attribute) { %> <%= attribute.key %>="<%= attribute.value %>" <% })%> >
+
+    <head>
+        <% if(head.metaTags.length > 0) { _(head.metaTags).each(function(metaTag) { %>
+            <meta <% _(metaTag.attributes).each(function(attribute) { %> <%= attribute.key %>="<%= attribute.value %>" <% })%> />
+        <% } )} %>
+
+        <title>
+            <%= head.title %>
+        </title>
+
+        <% if(head.css.length > 0) { 
+            _(head.css).each(function(css) { %>
+                <link rel="stylesheet" type="text/css" href="<%= css %>" />
+            <% })
+        } %>
+
+        <% if(head.js.length > 0) { 
+            _(head.js).each(function(js) { %>
+                <script type="text/javascript" language="javascript" src="<%= js %>"></script>
+            <% })
+        } %>
+
+    </head>
+
+    <body <% _(body.attributes).each(function(attribute) { %> <%= attribute.key %>="<%= attribute.value %>" <% }) %>>
+
+        <div id="player-container" class="player-wrapper">
+
+            <% if(body.videoContainer) { %>
+                <<%=body.videoContainer.name %> <% _(body.videoContainer.attributes).each(function(attribute) { %> <%= attribute.key %>="<%= attribute.value %>" <% }) %>> </<%=body.videoContainer.name %>>
+            <% } %>
+        </div>
+        
+        <% if(body.js.length > 0) { 
+            _(body.js).each(function(js) { %>
+                <script type="text/javascript" language="javascript" src="<%= js %>"></script>
+            <% })
+        } %>
+
+    </body>
+
+</html>

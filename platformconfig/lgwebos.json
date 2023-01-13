@@ -1,0 +1,31 @@
+{
+    "htmlAttributes": [],
+    "head": {
+        "metaTags": [],
+        "title": "Vizbee LGWebOS Sample App",
+        "css": [
+            "http://192.168.1.7:8080/css/style.css"
+        ],
+        "js": []
+    },
+    "body": {
+        "attributes": [],
+        "videoContainer": {
+            "name": "video",
+            "attributes": [
+                {
+                    "key": "id",
+                    "value": "video-element"
+                },
+                {
+                    "key": "src",
+                    "value": ""
+                }
+            ]
+        },
+        "js": [
+            "http://192.168.1.7:8080/bundle.js",
+            "https://vzb-origin.s3.amazonaws.com/sdk/v99.99.1/vizbee.js"
+        ]
+    }
+}

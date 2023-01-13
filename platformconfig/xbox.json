@@ -1,0 +1,30 @@
+{
+    "htmlAttributes": [],
+    "head": {
+        "metaTags": [],
+        "title": "Vizbee Xbox Sample App",
+        "css": [
+            "css/style.css"
+        ],
+        "js": []
+    },
+    "body": {
+        "attributes": [],
+        "videoContainer": {
+            "name": "video",
+            "attributes": [
+                {
+                    "key": "id",
+                    "value": "video-element"
+                },
+                {
+                    "key": "src",
+                    "value": ""
+                }
+            ]
+        },
+        "js": [
+            "bundle.js"
+        ]
+    }
+}

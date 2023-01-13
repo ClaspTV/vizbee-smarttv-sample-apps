@@ -1,0 +1,235 @@
+* {
+	font-family: "Helvetica", "effra", "Arial", sans-serif !important;
+	font-weight: 300;
+}
+
+.player-showing {
+	opacity: 1;
+}
+
+.player-hidden {
+	opacity: 0;
+}
+
+.player-wrapper {
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	position: absolute;
+}
+
+.my-player-overlay-container {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+}
+
+.gallery-wrapper {
+	width: 100%;
+	height: 200px;
+	display: block;
+	position: absolute;
+	bottom: 100px;
+	margin: 0 auto;
+	padding: 20px 0;
+	text-align: center;
+}
+
+.gallery-item {
+	height: 100%;
+	background-repeat: no-repeat;
+	background-size: cover;
+	margin: 0 1%;
+	-moz-transition: transform .3s ease 0s;
+	-webkit-transition: transform .3s ease 0s;
+	transition: transform .3s ease 0s;
+	box-shadow: 0px 0px 0px 5px #000, 0px 0px 0px 8px #000, 0px 0px 10px 10px #000;
+	-moz-transform: scale(0.9);
+	-webkit-transform: scale(0.9);
+	transform: scale(0.9);
+	display: inline-block;
+	width: 20%;
+}
+
+.gallery-item.active {
+	box-shadow: 0px 0px 0px 5px #000, 0px 0px 0px 8px #FFF, 0px 0px 10px 10px #000;
+	-webkit-transform: scale(1);
+	transform: scale(1);
+}
+
+.bg-thumbnail {
+	width: 100%;
+	height: 100%;
+	background-size: cover;
+	background-repeat: no-repeat;
+	-moz-filter: grayscale(70%) blur(15px);
+	-webkit-filter: grayscale(70%) blur(15px);
+	filter: grayscale(70%) blur(15px);
+	-moz-transition: background-image .3s ease 0s;
+	-webkit-transition: background-image .3s ease 0s;
+	transition: background-image .3s ease 0s;
+}
+
+.hidden {
+	display: none !important;
+}
+
+.controls-container,
+.metadata-container {
+	bottom: 10px;
+	width: 86%;
+	margin: 20px auto;
+	text-align: center;
+	position: relative;
+}
+.metadata-container{
+	text-align: left;
+}
+
+.thumbnail-image-container {
+	display: inline-block;
+	height: 144px;
+	margin-right: 24px;
+	float: left;
+}
+
+.thumbnail-image {
+	height: inherit;
+	width: auto;
+}
+
+.av-play{
+	position:absolute; 
+	left:0px; 
+	top:0px; 
+	width: 100%; 
+	height: 100%; 
+}
+
+.video-title {
+	width: auto;
+	font-size: 44px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: normal;
+	display: inline-block;
+	color: #FFF;
+	float: left;
+	position: absolute;
+	bottom: 0;
+	text-shadow: 0 0 2px #000;
+}
+
+.video-state {
+	width: 40px;
+	height: 40px;
+	margin: 5px 10px 0 0;
+	float: left;
+	background-repeat: no-repeat;
+	background-size: contain;
+}
+
+.video-state.play{
+	background-image: url('https://s3.amazonaws.com/vga-videos/sample-apps/play_icon.png');
+}
+.video-state.pause{
+	background-image: url('https://s3.amazonaws.com/vga-videos/sample-apps/pause_icon.png');
+}
+
+.video-seek-bar {
+	height: 15px;
+	width: calc(100% - 330px);
+	background: rgb(181, 181, 181);
+	vertical-align: middle;
+	overflow: hidden;
+	display: inline-block;
+	-moz-transition: transform .3s ease 0s;
+	-webkit-transition: transform .3s ease 0s;
+	transition: transform .3s ease 0s;
+	position: relative;
+	margin-top: 18px;
+	box-sizing: border-box;
+	border-radius: 2px;
+	text-align: left;
+	box-shadow: 0 0 1px 0px #000;
+	display: inline-block;
+}
+
+.video-seek-bar-full {
+	height: 10px;
+	width: 100%;
+	background: rgba(255, 255, 255, 0.3);
+	vertical-align: middle;
+}
+
+.video-elapsed-seek-bar {
+	position: absolute;
+	display: inline-block;
+	text-align: right;
+	width: 0%;
+	height: 100%;
+	-moz-transition: transform .3s ease 0s;
+	-webkit-transition: transform .3s ease 0s;
+	transition: transform .3s ease 0s;
+}
+
+.video-total-time,
+.video-elapsed-time {
+	width: auto;
+	display: inline-block;
+	font-size: 2em;
+	font-weight: bold;
+	line-height: 50px;
+	height: 50px;
+	float: left;
+	text-align: center;
+	text-shadow: 0 0 5px #000;
+}
+.video-total-time{
+	float: right;
+}
+
+.extended-player-controls-container {
+    background-color: transparent;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+}
+
+.clear{
+	clear: both;
+	width: 0;
+	height: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.spinner{
+	background-image: url('https://s3.amazonaws.com/vga-videos/images/vsa/loading.gif');
+	background-size: 142px 142px;
+	background-position: center center;
+	background-repeat: no-repeat;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.gallery-selected-title{
+	font-size: 4rem;
+	font-weight: bold;
+	position: absolute;
+	bottom: 365px;
+	right: 7%;
+	height: auto;
+	text-shadow: 0 0 5px #000;
+	-moz-transition: transform .3s ease 0s;
+	-webkit-transition: transform .3s ease 0s;
+	transition: transform .3s ease 0s;
+}
