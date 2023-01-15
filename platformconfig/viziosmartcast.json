@@ -26,7 +26,7 @@
         "js": [
             "http://192.168.1.7:8080/bundle.js",
             "http://localhost:12345/scfs/cl/js/vizio-companion-lib.js",
-            "https://vzb-origin.s3.amazonaws.com/sdk/v99.99.1/vizbee.js"
+            "https://sdk.claspws.tv/v7/vizbee.js"
         ]
     }
 }

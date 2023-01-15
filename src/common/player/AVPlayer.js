@@ -54,7 +54,7 @@ export default class AVPlayer extends BasePlayer {
      * http://developer.samsung.com/tv/develop/guides/multimedia/media-playback/using-avplay
      */
     setListener() {
-        window.setAVPlayerListener(this, this.playerElement);
+        this.playerElement.setListener(this.listeners);
     }
 
     /**
@@ -136,6 +136,8 @@ export default class AVPlayer extends BasePlayer {
             throw new TypeError('AVPlayer::startVideo() -- expects videoInfo.src.');
         }
 
+        this.setListener();
+        
         this.wasVideoPausedWhileLoading = false;
         this.setIsVideoLoadStarted(videoInfo);
 
@@ -145,8 +147,6 @@ export default class AVPlayer extends BasePlayer {
         // this.playerElement.setStreamingProperty("SET_MODE_4K");
         this.playerElement.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
 
-        // Need to bind listener only after open is called
-        this.setListener();
 
         this.playerElement.prepareAsync(() => {
             if (!this.isVideoStarted && this.isVideoLoadStarted) {

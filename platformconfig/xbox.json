@@ -24,7 +24,8 @@
             ]
         },
         "js": [
-            "bundle.js"
+            "http://192.168.1.7:8080/bundle.js",
+            "https://sdk.claspws.tv/v7/vizbee.js"
         ]
     }
 }

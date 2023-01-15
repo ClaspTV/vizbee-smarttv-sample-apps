@@ -119,6 +119,11 @@ export default class BrowseVideosExtension extends BaseKeyPadControlsExtension {
                     var vzbInstance = vizbee.continuity.ContinuityContext.getInstance();
                     vzbInstance.setPlayerAdapter(builtinPlayerAdapter);
 
+                    // set wrapped listener to the AVPlayer
+                    if(window.tizen) {
+                        webapis.avplay.setListener(builtinPlayerAdapter.wrapListener(this.basePlayer.listeners));
+                    }
+
                     // create vizbee videoInfo
                     var vizbeeVideoInfo = MyVizbeeConverters.toVideoInfo(this.currentVideo);
                     if (!vizbeeVideoInfo) {
