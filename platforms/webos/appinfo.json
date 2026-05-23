@@ -1,0 +1,14 @@
+{
+  "id": "com.vizbee.dev.samplewebapp",
+  "version": "0.1.0",
+  "vendor": "Vizbee",
+  "type": "web",
+  "main": "index.html",
+  "title": "Vizbee Sample Webapp",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "iconColor": "#0b0d10",
+  "uiRevision": "2",
+  "resolution": "1920x1080",
+  "supportTouchMode": "none"
+}

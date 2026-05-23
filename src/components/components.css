@@ -1,0 +1,361 @@
+/* Shared component styles. Focus state is the unifying primitive across
+ * cards, buttons, and toggles: scale-up + accent ring + glow.
+ */
+
+/* --- NavMenu ------------------------------------------------------------ */
+/* Fixed-width left rail. Items always show icon + label so layout never
+ * shifts — keeps spatial navigation rects stable. */
+
+.nav-menu {
+  position: relative;
+  flex: 0 0 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: rgba(11, 13, 16, 0.96);
+  border-right: 1px solid var(--color-border);
+  z-index: 10;
+}
+@supports (backdrop-filter: blur(20px)) {
+  .nav-menu {
+    background: rgba(11, 13, 16, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+.nav-menu__brand {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+}
+
+.nav-menu__logo {
+  width: 44px;
+  height: 44px;
+  display: block;
+  /* Slight glow so the logo reads against the dark glass backdrop. */
+  filter: drop-shadow(0 0 12px rgba(93, 255, 177, 0.3));
+}
+
+.nav-menu__wordmark {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+}
+
+.nav-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+}
+
+.nav-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 72px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: left;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-med);
+}
+
+.nav-menu__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+.nav-menu__icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.nav-menu__label {
+  flex: 1 1 auto;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Active route */
+.nav-menu__item--active {
+  color: var(--color-text);
+}
+.nav-menu__item--active .nav-menu__icon {
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+}
+
+/* Focus */
+.nav-menu__item.is-focused {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+  transform: scale(1.02);
+}
+.nav-menu__item.is-focused .nav-menu__icon {
+  color: var(--color-accent);
+}
+
+
+/* --- VideoCard ----------------------------------------------------------- */
+
+.video-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med),
+    border-color var(--transition-fast);
+}
+
+.video-card__poster {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 — works on older Chromium where aspect-ratio doesn't */
+  background-color: var(--color-bg-2);
+  background-size: cover;
+  background-position: center;
+}
+.video-card__poster::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.7) 100%);
+  opacity: 0;
+  transition: opacity var(--transition-med);
+}
+
+.video-card__title {
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.video-card__duration {
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.video-card.is-focused {
+  transform: scale(1.06);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+  z-index: 2;
+}
+.video-card.is-focused .video-card__poster::after {
+  opacity: 1;
+}
+
+/* --- FocusableButton ---------------------------------------------------- */
+
+.focusable-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+.focusable-btn.is-focused {
+  transform: scale(1.06);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.focusable-btn--primary {
+  background: var(--color-gradient-1);
+  border: none;
+}
+
+.focusable-btn--ghost {
+  background: transparent;
+}
+
+/* --- Toggle ------------------------------------------------------------- */
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med),
+    border-color var(--transition-fast);
+}
+
+.toggle__label {
+  text-align: left;
+}
+
+.toggle__switch {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  transition: background var(--transition-med), border-color var(--transition-fast);
+}
+.toggle__switch::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  transition: left var(--transition-med) var(--ease-bounce), background var(--transition-fast);
+}
+.toggle.toggle--on .toggle__switch {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.toggle.toggle--on .toggle__switch::after {
+  left: 32px;
+  background: #fff;
+}
+
+.toggle.is-focused {
+  transform: scale(1.02);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+
+/* --- RadioGroup -------------------------------------------------------- */
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.radio-group__label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.radio-group__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.radio-option__dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-muted);
+  background: transparent;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.radio-option__label {
+  text-align: left;
+}
+
+.radio-option--selected {
+  color: var(--color-text);
+}
+
+.radio-option--selected .radio-option__dot {
+  border-color: var(--color-accent);
+  background:
+    radial-gradient(circle, var(--color-accent) 0 5px, transparent 6px);
+}
+
+.radio-option.is-focused {
+  transform: scale(1.02);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}

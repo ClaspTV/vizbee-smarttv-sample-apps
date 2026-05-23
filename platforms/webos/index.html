@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920,initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Vizbee Sample Webapp</title>
+    <!--
+      webOS-only loader shell. The document stays at local file:// origin so
+      webOS's injected ilib (which sync-XHRs locale data from file:///usr/share/
+      javascript/ilib/...) keeps working. The actual app bundle ships from CDN
+      and is hot-replaceable via `npm run deploy:s3 webos` without re-installing
+      the .ipk. Cross-origin <script type="module"> requires CORS headers on
+      CloudFront — already configured (SimpleCORS managed policy).
+    -->
+    <script type="module" crossorigin src="https://d1a16fhfuhnwgt.cloudfront.net/webos/assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="https://d1a16fhfuhnwgt.cloudfront.net/webos/assets/index.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

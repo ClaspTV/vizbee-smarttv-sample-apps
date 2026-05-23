@@ -1,0 +1,57 @@
+/* App layout shell: persistent menu + content area.
+ * Pages render into .app-content; the menu is mounted once and stays. */
+
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Player immersive: menu hidden entirely while content plays. The
+ * .app-layout repeated in the selector is intentional — it raises
+ * specificity above .app-layout--menu-collapsed so the player still wins
+ * even when both classes are present (PlayerPage adds --immersive; then
+ * focusing Play/Pause flips the content-zone --menu-collapsed on too). */
+.app-layout.app-layout--immersive .nav-menu {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  transform: translateX(-100%);
+  pointer-events: none;
+  transition:
+    flex-basis var(--transition-slow),
+    transform var(--transition-slow);
+}
+
+/* Home/Settings collapsed: shrink the menu to an icon-only rail while focus
+ * is in content. Icons stay so the user always sees nav targets and where
+ * they came from; labels/wordmark fold out so content gets the screen.
+ * LEFT from the leftmost content focusable picks a menu item via spatial
+ * nav, flipping zone back to 'menu' and re-expanding the rail with labels.
+ *
+ * display:none on the label (vs opacity:0) is intentional — the label has
+ * flex:1 and would otherwise keep claiming layout width even while
+ * invisible, leaving the icon stuck at the left instead of centered. */
+.app-layout--menu-collapsed .nav-menu {
+  flex: 0 0 88px;
+  transition: flex-basis var(--transition-slow);
+}
+.app-layout--menu-collapsed .nav-menu__label,
+.app-layout--menu-collapsed .nav-menu__wordmark {
+  display: none;
+}
+.app-layout--menu-collapsed .nav-menu__item,
+.app-layout--menu-collapsed .nav-menu__brand {
+  justify-content: center;
+  gap: 0;
+}

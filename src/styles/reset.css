@@ -1,0 +1,49 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Uniform viewport scaling. The app is designed against a fixed 1920x1080
+ * surface; main.ts measures the real viewport and writes --app-scale, and
+ * we transform the design down (HD ≈ 0.67x) or up (rare on TVs) to fit.
+ * One design source, every panel size. transform-origin: top-left so the
+ * scaled box stays anchored at (0,0) and the design's right/bottom edges
+ * match the viewport edges exactly. */
+#app {
+  width: 1920px;
+  height: 1080px;
+  transform: scale(var(--app-scale, 1));
+  transform-origin: top left;
+}
+
+button {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+ul {
+  list-style: none;
+}

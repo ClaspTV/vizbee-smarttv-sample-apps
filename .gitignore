@@ -1,6 +1,11 @@
-.history
-node_modules
-dist
+node_modules/
+dist/
+build/
+packages/
+*.wgt
+*.ipk
+*.appx
+*.log
 .DS_Store
-
-package-lock.json
+.vscode/
+.idea/

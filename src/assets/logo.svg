@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+  <defs>
+    <linearGradient id="vizbee-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5dffb1"/>
+      <stop offset="100%" stop-color="#0cd86c"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="50" cy="50" rx="42" ry="32" transform="rotate(-25 50 50)" fill="url(#vizbee-grad)"/>
+  <path d="M42 33 L42 67 L68 50 Z" fill="#ffffff"/>
+</svg>

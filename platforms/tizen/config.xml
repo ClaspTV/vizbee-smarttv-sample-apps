@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://vizbee.tv/sample-webapp" version="0.1.0" viewmodes="maximized">
+    <access origin="*" subdomains="true"></access>
+    <tizen:application id="VizbeeSamp.VizbeeTizenSampleApp" package="VizbeeSamp" required_version="2.4"/>
+    <author>Vizbee Sample</author>
+    <content src="https://d1a16fhfuhnwgt.cloudfront.net/tizen/index.html"/>
+    <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+    <icon src="app_logo.png"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/devmode.test" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/widget.theme" value="dark"/>
+    <name>VizbeeTizenSampleApp</name>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.hardkey.back" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/webcontrol" value="false"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.preview" value="heap_type=CARD_512MB"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/multiprocess" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/devel.api.version" value="2.4"/>
+    <tizen:metadata key="http://tizen.org/metadata/app_ui_type/base_screen_resolution" value="extensive"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/network.csp.enable" value="false"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/gpu.acceleration" value="on"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/instant.loading" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/disable.update.check" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/app.type" value="web"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/cache.mode" value="fastest"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/preload.enable" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/required.platform.version" value="2.3"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/splash.screen.display" value="false"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/direct.display" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/skip.launcher.animation" value="true"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/hostedapp_deviceapi_allow"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/adinfo"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="enable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>
