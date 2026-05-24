@@ -14,6 +14,7 @@ import './features/settings/settings.css';
 
 import { PlatformFactory } from './core/platform/PlatformFactory';
 import { RemoteKeyService } from './core/input/RemoteKeyService';
+import { HardwareBackButton } from './core/input/HardwareBackButton';
 import { FocusManager } from './core/navigation/FocusManager';
 import { LifecycleManager } from './core/lifecycle/LifecycleManager';
 import { ConfigService } from './services/config/ConfigService';
@@ -82,6 +83,12 @@ async function boot(): Promise<void> {
   if (!rootEl) throw new Error('#app element not found');
   installViewportScale();
   startApp(rootEl, router);
+
+  // webOS delivers the remote BACK as a history popstate (not a keydown) and
+  // exits the app at the history root. Seed the sentinel + popstate→BACK bridge
+  // *after* the first route is set so the logical BACK handlers (e.g. the Home
+  // exit confirm) catch it instead of the OS closing the app.
+  new HardwareBackButton(remoteKeys).start();
 }
 
 // Uniform viewport scaling: design once at 1920x1080 and let CSS transform

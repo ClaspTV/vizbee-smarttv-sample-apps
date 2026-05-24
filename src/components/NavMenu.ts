@@ -75,16 +75,16 @@ export function createNavMenu(): { element: HTMLElement; dispose: () => void } {
   menu.appendChild(brand);
   menu.appendChild(list);
 
-  // Active-route highlight
-  const updateActive = (): void => {
-    const path = window.location.hash.replace(/^#/, '') || '/home';
+  // Active-route highlight. Driven by the router's change event (the router is
+  // in-memory; there's no location.hash to watch).
+  const updateActive = (path: string): void => {
     for (const el of itemEls) {
       const route = el.dataset.route ?? '';
       el.classList.toggle('nav-menu__item--active', path === route);
     }
   };
-  updateActive();
-  window.addEventListener('hashchange', updateActive);
+  updateActive(services().router.getCurrentPath() || '/home');
+  const offChange = services().router.onChange(({ path }) => updateActive(path));
 
   // ENTER on a focused menu item navigates. RemoteKeyService preventsDefault
   // on ENTER, so the native <button> click doesn't fire on TV — wire it here.
@@ -99,7 +99,7 @@ export function createNavMenu(): { element: HTMLElement; dispose: () => void } {
   return {
     element: menu,
     dispose: () => {
-      window.removeEventListener('hashchange', updateActive);
+      offChange();
       off();
     },
   };

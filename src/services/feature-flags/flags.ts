@@ -5,14 +5,14 @@
 export interface FeatureFlags {
   debugMode: boolean;
   syncConnection: 'pubnub' | 'local';
-  vizbeeSdk: 'full' | 'light';
+  vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   videoPlayer: 'html';
 }
 
 export const DEFAULT_FLAGS: FeatureFlags = {
   debugMode: false,
   syncConnection: 'pubnub',
-  vizbeeSdk: 'full',
+  vizbeeSdk: 'light-es5',
   videoPlayer: 'html',
 };
 
@@ -34,8 +34,10 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
     { value: 'local', label: 'Use Local Communication' },
   ],
   vizbeeSdk: [
-    { value: 'full', label: 'Use Full Vizbee SDK' },
-    { value: 'light', label: 'Use Light Vizbee SDK' },
+    { value: 'full-es5', label: 'Use Full Vizbee SDK - ES5' },
+    { value: 'full-es6', label: 'Use Full Vizbee SDK - ES6' },
+    { value: 'light-es5', label: 'Use Light Vizbee SDK - ES5' },
+    { value: 'light-es6', label: 'Use Light Vizbee SDK - ES6' },
   ],
   videoPlayer: [
     { value: 'html', label: 'Use HTML Player' },

@@ -105,6 +105,13 @@ The script copies `dist/` into a staging dir along with
 [`platforms/tizen/config.xml`](../platforms/tizen/config.xml) and runs
 `tizen package -t wgt`. Adjust `config.xml` (id, name, icon) for your app.
 
+### Vizbee SDK build
+
+Tizen can load any of four SDK builds — **full/light × ES5/ES6** — selectable
+at runtime (Settings → *Vizbee SDK*, default `light-es5`). Use ES5 on older
+Tizen 4–5 engines. URLs and switching details:
+[vizbee-sdk.md](vizbee-sdk.md#urls-by-platform--variant).
+
 ### Gotchas
 
 - Tizen Web Runtime caches resources aggressively across launches. Bump
@@ -149,6 +156,13 @@ ares-setup-device                     # one-time: register your TV
 ares-install -d <device> build/*.ipk
 ares-launch  -d <device> com.vizbee.samplewebapp
 ```
+
+### Vizbee SDK build
+
+Like Tizen, webOS can load any of four SDK builds — **full/light × ES5/ES6** —
+selectable at runtime (Settings → *Vizbee SDK*, default `light-es5`). Use ES5 on
+older webOS 4 engines. URLs and switching details:
+[vizbee-sdk.md](vizbee-sdk.md#urls-by-platform--variant).
 
 ### Gotchas
 

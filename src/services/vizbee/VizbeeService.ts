@@ -2,6 +2,7 @@ import { Logger } from '@/services/logger/Logger';
 import { findVideo, registerVideo } from '@/data/videos';
 import { services } from '@/services/ServiceContainer';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
+import type { FeatureFlags } from '@/services/feature-flags/flags';
 
 // vizbee.js is loaded as an external <script> in index.html and exposes
 // the global window.vizbee. No npm package; types come from the SDK guide.
@@ -53,7 +54,7 @@ export class VizbeeService implements IVizbeeService {
 
   private async startWhenReady(appId: string): Promise<void> {
     const platform = services().platform.name;
-    const sdkUrl = SDK_URL_BY_PLATFORM[platform];
+    const sdkUrl = this.resolveSdkUrl(platform);
     if (!sdkUrl) {
       this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
       return;
@@ -77,6 +78,17 @@ export class VizbeeService implements IVizbeeService {
     } catch (e) {
       this.log.error('continuity start failed', e);
     }
+  }
+
+  // Tizen and webOS ship 4 SDK builds selectable in Settings (full/light ×
+  // ES5/ES6); the `vizbeeSdk` flag picks one. Other platforms ship a single
+  // build, so the flag doesn't apply and they fall back to their per-platform URL.
+  private resolveSdkUrl(platform: PlatformName): string | undefined {
+    const variants = SDK_URL_BY_VARIANT[platform];
+    if (variants) {
+      return variants[services().flags.get('vizbeeSdk')];
+    }
+    return SDK_URL_BY_PLATFORM[platform];
   }
 
   private onDeeplink(videoInfo: any): void {
@@ -182,12 +194,29 @@ export class VizbeeService implements IVizbeeService {
 
 // Each TV platform ships its own SDK build; loading the wrong one yields a
 // broken handshake. `desktop` is intentionally absent — App.ts gates init off.
+// `tizen` and `webos` are resolved via SDK_URL_BY_VARIANT (Settings flag).
 const SDK_URL_BY_PLATFORM: Partial<Record<PlatformName, string>> = {
-  tizen: 'https://sdk.claspws.tv/samsungtv_tizen/v7/vizbee.js',
-  // tizen: 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js',
   viziosmartcast: 'https://sdk.claspws.tv/vizio_smartcast/v7/vizbee.js',
-  webos: 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
   xbox: 'https://sdk.claspws.tv/xbox_one/v7/vizbee.js',
+};
+
+// Platforms that expose the 4 selectable builds (full/light × ES5/ES6) via the
+// `vizbeeSdk` Settings flag. Each full build serves both ES5 and ES6 from one
+// URL; the light builds are split by target. Platforms absent here ship a
+// single build and fall back to SDK_URL_BY_PLATFORM.
+const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizbeeSdk'], string>>> = {
+  tizen: {
+    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js',
+    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native_es6.js',
+  },
+  webos: {
+    'full-es5': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native.js',
+    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native_es6.js',
+  },
 };
 
 function loadScript(src: string): Promise<void> {

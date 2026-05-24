@@ -1,5 +1,6 @@
 import { createToggle } from '@/components/Toggle';
 import { createRadioGroup, firstFocusableOption } from '@/components/RadioGroup';
+import { showConfirmDialog } from '@/components/ConfirmDialog';
 import { services } from '@/services/ServiceContainer';
 import { DEFAULT_FLAGS, FLAG_LABELS, FLAG_OPTIONS, FlagKey } from '@/services/feature-flags/flags';
 
@@ -47,7 +48,10 @@ export function renderSettingsPage(root: HTMLElement): () => void {
         options,
         initialValue: current,
         // Cast: set's overload narrows per key, but the loop's K is widened.
-        onChange: (value) => flags.set(key, value as never),
+        onChange: (value) => {
+          flags.set(key, value as never);
+          if (key === 'vizbeeSdk') promptSdkReload(value);
+        },
       });
       initialFocus = firstFocusableOption(row);
     } else {
@@ -98,6 +102,21 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   });
 
   return () => off();
+}
+
+// The Vizbee SDK <script> is injected once at boot, so switching builds only
+// takes effect on a fresh load. Offer an immediate reload to apply the picked
+// build now; "Later" keeps the selection (persisted) for the next launch.
+function promptSdkReload(value: string): void {
+  const label = (FLAG_OPTIONS.vizbeeSdk?.find((o) => o.value === value)?.label ?? '')
+    .replace(/^Use\s+/, '') || 'The selected SDK';
+  showConfirmDialog({
+    title: 'Reload to apply SDK?',
+    message: `Switching to "${label}" takes effect after a reload. Reload now?`,
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.reload(),
+  });
 }
 
 function appendInfo(parent: HTMLElement, label: string, value: string): void {
