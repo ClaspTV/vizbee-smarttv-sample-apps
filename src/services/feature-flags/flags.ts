@@ -7,13 +7,25 @@ export interface FeatureFlags {
   syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   videoPlayer: 'html';
+  // Which hosted app build to run: 'script' (external <script> SDK, …/webos/)
+  // or 'npm' (node_modules-bundled SDK, …/webos-with-nodemodule/<module>/).
+  // Selecting it redirects to that build's URL — see core/platform/appBuild.ts.
+  appBuild: 'script' | 'npm';
+  // For the npm build only: which bundled module to load — maps to the
+  // …/webos-with-nodemodule/es5 vs /es6 hosted folders. Surfaced in the
+  // build-aware "Vizbee SDK" row (the script build uses `vizbeeSdk` instead).
+  npmModule: 'es5' | 'es6';
 }
 
+// Key order here is the order rows appear in Settings. (npmModule renders
+// inside the build-aware "Vizbee SDK" row, not as its own row.)
 export const DEFAULT_FLAGS: FeatureFlags = {
-  debugMode: false,
-  syncConnection: 'pubnub',
+  appBuild: 'script',
   vizbeeSdk: 'light-es5',
+  syncConnection: 'pubnub',
   videoPlayer: 'html',
+  debugMode: false,
+  npmModule: 'es5',
 };
 
 export type FlagKey = keyof FeatureFlags;
@@ -24,6 +36,8 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
   syncConnection: 'Sync Connection',
   vizbeeSdk: 'Vizbee SDK',
   videoPlayer: 'Video Player',
+  appBuild: 'App Build',
+  npmModule: 'NPM SDK Module',
 };
 
 // Labels for the options of each enum-typed flag. Boolean flags don't appear
@@ -41,5 +55,13 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
   ],
   videoPlayer: [
     { value: 'html', label: 'Use HTML Player' },
+  ],
+  appBuild: [
+    { value: 'script', label: 'Use Script build (external SDK)' },
+    { value: 'npm', label: 'Use NPM build (bundled SDK)' },
+  ],
+  npmModule: [
+    { value: 'es5', label: 'Use ES5 Module' },
+    { value: 'es6', label: 'Use ES6 Module' },
   ],
 };

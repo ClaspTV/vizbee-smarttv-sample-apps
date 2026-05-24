@@ -51,6 +51,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    // Build-time stamp so the running app can report which build it is (shown
+    // in Settings → Device). Each per-folder build gets its own timestamp.
+    define: {
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

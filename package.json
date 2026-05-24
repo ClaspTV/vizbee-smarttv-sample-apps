@@ -23,8 +23,16 @@
     "start:webos": "vite build --mode webos && vite preview --outDir dist/webos --host",
     "start:xbox": "vite build --mode xbox && vite preview --outDir dist/xbox --host",
     "deploy:s3": "CLOUDFRONT_DISTRIBUTION_ID=${CLOUDFRONT_DISTRIBUTION_ID:-E12EF2Z11SO5GL} bash scripts/deploy-s3.sh",
-    "ship:tizen": "tsc --noEmit && vite build --mode tizen && npm run deploy:s3 tizen",
-    "ship:webos": "tsc --noEmit && vite build --mode webos && npm run deploy:s3 webos",
+    "ship:tizen:script": "tsc --noEmit && vite build --mode tizen && npm run deploy:s3 tizen",
+    "ship:tizen:npm:es5": "tsc --noEmit && vite build --mode tizen --outDir dist/tizen-with-nodemodule/es5 && npm run deploy:s3 tizen-with-nodemodule/es5",
+    "ship:tizen:npm:es6": "tsc --noEmit && vite build --mode tizen --outDir dist/tizen-with-nodemodule/es6 && npm run deploy:s3 tizen-with-nodemodule/es6",
+    "ship:tizen:npm": "npm run ship:tizen:npm:es5 && npm run ship:tizen:npm:es6",
+    "ship:tizen": "npm run ship:tizen:script",
+    "ship:webos:script": "tsc --noEmit && vite build --mode webos && npm run deploy:s3 webos",
+    "ship:webos:npm:es5": "tsc --noEmit && vite build --mode webos --outDir dist/webos-with-nodemodule/es5 && npm run deploy:s3 webos-with-nodemodule/es5",
+    "ship:webos:npm:es6": "tsc --noEmit && vite build --mode webos --outDir dist/webos-with-nodemodule/es6 && npm run deploy:s3 webos-with-nodemodule/es6",
+    "ship:webos:npm": "npm run ship:webos:npm:es5 && npm run ship:webos:npm:es6",
+    "ship:webos": "npm run ship:webos:script",
     "ship": "tsc --noEmit && vite build --mode tizen && vite build --mode webos && npm run deploy:s3 tizen webos"
   },
   "devDependencies": {

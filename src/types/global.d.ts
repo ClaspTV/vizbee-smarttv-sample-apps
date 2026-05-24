@@ -35,6 +35,10 @@ declare global {
   // Xbox / UWP
   // Defined globally on Windows TVs; declared loosely here.
   const Windows: unknown;
+
+  // Build-time stamp injected by Vite (see vite.config.ts → define). Shown in
+  // Settings → Device so you can tell which deployed build is actually running.
+  const __BUILD_TIME__: string;
 }
 
 export {};

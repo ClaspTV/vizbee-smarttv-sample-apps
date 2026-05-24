@@ -13,6 +13,7 @@ import './features/player/player.css';
 import './features/settings/settings.css';
 
 import { PlatformFactory } from './core/platform/PlatformFactory';
+import { redirectToSelectedBuild, buildLabel } from './core/platform/appBuild';
 import { RemoteKeyService } from './core/input/RemoteKeyService';
 import { HardwareBackButton } from './core/input/HardwareBackButton';
 import { FocusManager } from './core/navigation/FocusManager';
@@ -39,6 +40,23 @@ async function boot(): Promise<void> {
   flags.load();
   if (flags.get('debugMode')) setLogLevel('debug');
   else setLogLevel('info');
+
+  // If a different app build (script vs npm) is selected, hop to its hosted URL
+  // before doing any further work. webOS/Tizen only; same CloudFront origin, so
+  // the flag persists across the load. Returning stops this build from booting.
+  if (redirectToSelectedBuild(platform.name, flags.get('appBuild'), flags.get('npmModule'))) {
+    log.info('redirecting to selected app build', {
+      appBuild: flags.get('appBuild'),
+      npmModule: flags.get('npmModule'),
+    });
+    return;
+  }
+
+  log.info('app build', {
+    build: buildLabel(platform.name),
+    source: `${window.location.origin}${window.location.pathname}`,
+    builtAt: __BUILD_TIME__,
+  });
 
   const remoteKeys = new RemoteKeyService(platform);
   const focus = new FocusManager(remoteKeys);

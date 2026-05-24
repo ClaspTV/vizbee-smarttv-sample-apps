@@ -365,8 +365,14 @@
  * input (see ConfirmDialog.ts) so the page behind can't act on BACK/ENTER. */
 
 .confirm-overlay {
+  /* Explicit edges, not `inset: 0` — `inset` shorthand isn't supported on
+   * older TV Chromium (webOS/Tizen), where it would collapse the fixed overlay
+   * to zero size and the dialog would never appear. */
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 100;
   display: flex;
   align-items: center;

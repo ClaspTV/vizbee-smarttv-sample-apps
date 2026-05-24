@@ -218,8 +218,10 @@ group, and its URL overrides are validated against those values.
 |---|---|---|
 | `debugMode` | `boolean` · `false` | Raises the logger to `debug` level at boot ([`main.ts`](../src/main.ts)). |
 | `syncConnection` | `pubnub` \| `local` · `pubnub` | Continuity transport choice. Surfaced in Settings; reserved — not yet consumed by the SDK seam. |
-| `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. See [vizbee-sdk.md](vizbee-sdk.md). |
+| `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. **Build-aware "Vizbee SDK" row:** these options show on the **script** build; on the **npm** build the row shows `npmModule` (ES5/ES6) instead. See [vizbee-sdk.md](vizbee-sdk.md). |
 | `videoPlayer` | `html` · `html` | Player implementation. Single HTML `<video>` option today; reserved for adding alternatives. |
+| `appBuild` | `script` \| `npm` · `script` | Which hosted app build to run — `script` (external-`<script>` SDK, `…/webos/`) vs `npm` (node_modules-bundled SDK, `…/webos-with-nodemodule/<module>/`). Selecting it reloads into that build's URL on webOS/Tizen (same origin, so the flag carries over). No-op on desktop/dev. See [`appBuild.ts`](../src/core/platform/appBuild.ts). |
+| `npmModule` | `es5` \| `es6` · `es5` | npm build only: which bundled module folder to load (`…/webos-with-nodemodule/es5` vs `/es6`). Has no row of its own — it's the build-aware "Vizbee SDK" row when running the npm build. Selecting it redirects to that module's URL. |
 
 Enum-typed flags (those with entries in `FLAG_OPTIONS`) render as a **radio
 group**; boolean flags render as a **toggle**.

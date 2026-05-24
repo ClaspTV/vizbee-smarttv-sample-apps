@@ -30,6 +30,21 @@
   margin-bottom: var(--space-6);
 }
 
+/* Two-column layout: feature flags (left, flexible) + device info (right). */
+.settings-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+.settings-body > .settings-section {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
+.settings-section--device {
+  flex: 0 0 420px;
+  max-width: 420px;
+}
+
 .settings-section__title {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
@@ -45,11 +60,9 @@
   gap: var(--space-2);
 }
 
+/* Stacked label-above-value — reads better in the narrow right column and
+ * wraps long values (e.g. the Source URL) cleanly. */
 .settings-info {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  row-gap: var(--space-2);
-  column-gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -58,12 +71,17 @@
 
 .settings-info dt {
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  margin-top: var(--space-2);
+}
+.settings-info dt:first-child {
+  margin-top: 0;
 }
 
 .settings-info dd {
+  margin: 2px 0 0 0;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   word-break: break-word;
