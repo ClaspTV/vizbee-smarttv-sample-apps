@@ -57,7 +57,7 @@ export class VizbeeService implements IVizbeeService {
     // Tizen SDK is bundled via `@vizbee/sdk-tizen` npm package (imported in the
     // tizen active-adapter shim), so we skip the dynamic script load.  Other
     // platforms still fetch their SDK from the CDN.
-    if (platform !== 'tizen') {
+    if (platform !== 'tizen' && platform !== 'webos') {
       const sdkUrl = SDK_URL_BY_PLATFORM[platform];
       if (!sdkUrl) {
         this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
