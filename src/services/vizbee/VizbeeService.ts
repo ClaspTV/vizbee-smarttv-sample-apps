@@ -53,17 +53,24 @@ export class VizbeeService implements IVizbeeService {
 
   private async startWhenReady(appId: string): Promise<void> {
     const platform = services().platform.name;
-    const sdkUrl = SDK_URL_BY_PLATFORM[platform];
-    if (!sdkUrl) {
-      this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
-      return;
+
+    // Tizen SDK is bundled via `@vizbee/sdk-tizen` npm package (imported in the
+    // tizen active-adapter shim), so we skip the dynamic script load.  Other
+    // platforms still fetch their SDK from the CDN.
+    if (platform !== 'tizen') {
+      const sdkUrl = SDK_URL_BY_PLATFORM[platform];
+      if (!sdkUrl) {
+        this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
+        return;
+      }
+      try {
+        await loadScript(sdkUrl);
+      } catch (e) {
+        this.log.error('failed to load Vizbee SDK script', e);
+        return;
+      }
     }
-    try {
-      await loadScript(sdkUrl);
-    } catch (e) {
-      this.log.error('failed to load Vizbee SDK script', e);
-      return;
-    }
+
     const ok = await waitForSdk();
     if (!ok) {
       this.log.warn('SDK not available on window.vizbee; continuity disabled');
@@ -73,7 +80,7 @@ export class VizbeeService implements IVizbeeService {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.start(appId);
       ctx.getAppAdapter().setDeeplinkHandler((info: any) => this.onDeeplink(info));
-      this.log.info('continuity started', { appId, sdkUrl });
+      this.log.info('continuity started', { appId, platform });
     } catch (e) {
       this.log.error('continuity start failed', e);
     }
