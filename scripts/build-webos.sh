@@ -27,6 +27,8 @@ cp "$ROOT/platforms/webos/appinfo.json" "$STAGE/appinfo.json"
 [ -f "$ROOT/platforms/webos/index.html" ] && cp "$ROOT/platforms/webos/index.html" "$STAGE/index.html"
 [ -f "$ROOT/platforms/webos/icon.png" ] && cp "$ROOT/platforms/webos/icon.png" "$STAGE/icon.png"
 [ -f "$ROOT/platforms/webos/largeIcon.png" ] && cp "$ROOT/platforms/webos/largeIcon.png" "$STAGE/largeIcon.png"
+# Launch splash (appinfo.json → "splashBackground"). 1920x1080 recommended.
+[ -f "$ROOT/platforms/webos/splash.png" ] && cp "$ROOT/platforms/webos/splash.png" "$STAGE/splash.png"
 
 mkdir -p "$ROOT/packages/webos"
 ares-package "$STAGE" -o "$ROOT/packages/webos"

@@ -23,6 +23,8 @@ cp -R "$DIST"/* "$STAGE"/
 cp "$ROOT/platforms/tizen/config.xml" "$STAGE/config.xml"
 # Optional: drop in icon.png if you have one in platforms/tizen/.
 [ -f "$ROOT/platforms/tizen/icon.png" ] && cp "$ROOT/platforms/tizen/icon.png" "$STAGE/icon.png"
+# Launch splash (config.xml → <tizen:splash-screen src="splash.png"/>). 1920x1080.
+[ -f "$ROOT/platforms/tizen/splash.png" ] && cp "$ROOT/platforms/tizen/splash.png" "$STAGE/splash.png"
 
 mkdir -p "$ROOT/packages/tizen"
 tizen package -t wgt -o "$ROOT/packages/tizen" -- "$STAGE"
