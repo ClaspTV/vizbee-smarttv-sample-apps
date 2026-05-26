@@ -360,6 +360,32 @@
   box-shadow: var(--shadow-focus);
 }
 
+/* --- DebugOverlay ------------------------------------------------------- */
+/* On-screen log readout shown in Debug mode. Non-interactive (pointer-events:
+ * none, not focusable) so it never affects spatial nav. */
+
+.debug-overlay {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  width: 46%;
+  max-height: 42%;
+  margin: var(--space-2);
+  padding: var(--space-2);
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--color-success);
+  background: rgba(7, 9, 12, 0.82);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
 /* --- TextField ---------------------------------------------------------- */
 /* Read-only settings row (label + value). ENTER opens the modal editor. */
 

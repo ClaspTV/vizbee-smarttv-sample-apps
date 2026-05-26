@@ -216,7 +216,6 @@ group, and its URL overrides are validated against those values.
 
 | Flag | Type / default | Effect |
 |---|---|---|
-| `debugMode` | `boolean` · `false` | Raises the logger to `debug` level at boot ([`main.ts`](../src/main.ts)). |
 | `syncConnection` | `pubnub` \| `local` · `pubnub` | Continuity transport choice. Surfaced in Settings; reserved — not yet consumed by the SDK seam. |
 | `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. **Build-aware "Vizbee SDK" row:** these options show on the **script** build; on the **npm** build the row shows `npmModule` (ES5/ES6) instead. See [vizbee-sdk.md](vizbee-sdk.md). |
 | `videoPlayer` | `html` · `html` | Player implementation. Single HTML `<video>` option today; reserved for adding alternatives. |

@@ -39,8 +39,11 @@ async function boot(): Promise<void> {
   config.load();
   const flags = new FeatureFlagService();
   flags.load();
-  if (flags.get('debugMode')) setLogLevel('debug');
-  else setLogLevel('info');
+
+  // Debug/remote logging is disabled for now. The plumbing (DebugOverlay,
+  // PubNubLogger, Logger sinks, log.debug traces) is kept for a future secure
+  // re-enable; logs stay at 'info' so the verbose debug traces don't print.
+  setLogLevel('info');
 
   // If a different app build (script vs npm) is selected, hop to its hosted URL
   // before doing any further work. webOS/Tizen only; same CloudFront origin, so

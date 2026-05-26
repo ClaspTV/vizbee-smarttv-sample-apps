@@ -81,9 +81,11 @@ export function renderSettingsPage(root: HTMLElement): () => void {
       });
       initialFocus = firstFocusableOption(row);
     } else {
+      // Toggle path (boolean flags). No boolean flags exist right now, so this
+      // is currently unused — Boolean() keeps it valid for when one is added.
       row = createToggle({
         label: FLAG_LABELS[key],
-        initialValue: current as boolean,
+        initialValue: Boolean(current),
         onChange: (value) => flags.set(key, value as never),
       });
       initialFocus = row;

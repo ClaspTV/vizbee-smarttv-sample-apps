@@ -1,4 +1,5 @@
 import { RemoteKeyService } from './RemoteKeyService';
+import { Logger } from '@/services/logger/Logger';
 
 // LG webOS (and some other TV browsers) deliver the remote BACK button as a
 // browser history navigation — a `popstate` — NOT a keydown. RemoteKeyService
@@ -14,6 +15,7 @@ import { RemoteKeyService } from './RemoteKeyService';
 // their BACK never produces a popstate, so onPopState simply never fires.
 export class HardwareBackButton {
   private started = false;
+  private readonly log = new Logger('HardwareBack');
 
   constructor(private readonly keys: RemoteKeyService) {}
 
@@ -43,6 +45,7 @@ export class HardwareBackButton {
   }
 
   private onPopState = (): void => {
+    this.log.debug('popstate → BACK (hardware back)');
     this.arm();
     this.keys.dispatch('BACK');
   };

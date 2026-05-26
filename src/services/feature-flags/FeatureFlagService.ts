@@ -48,8 +48,10 @@ export class FeatureFlagService {
     this.emitter.emit('change', { key, value });
   }
 
+  // Flip a boolean flag. Cast: set's value is narrowed to FeatureFlags[K], but
+  // there are no boolean flags right now, so widen for this generic helper.
   toggle(key: FlagKey): void {
-    this.set(key, !this.flags[key]);
+    this.set(key, !this.flags[key] as never);
   }
 
   on(listener: (e: FlagEvents['change']) => void): () => void {

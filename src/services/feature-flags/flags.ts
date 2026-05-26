@@ -3,7 +3,6 @@
 // adapts automatically.
 
 export interface FeatureFlags {
-  debugMode: boolean;
   syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   videoPlayer: 'html';
@@ -24,15 +23,16 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   vizbeeSdk: 'light-es5',
   syncConnection: 'pubnub',
   videoPlayer: 'html',
-  debugMode: false,
   npmModule: 'es5',
 };
 
 export type FlagKey = keyof FeatureFlags;
-export type FlagValue = FeatureFlags[FlagKey];
+// The value universe the flag framework supports (toggle = boolean, radio =
+// string). Decoupled from the current flags so the boolean/toggle code paths
+// stay valid even when no boolean flag happens to exist right now.
+export type FlagValue = string | boolean;
 
 export const FLAG_LABELS: Record<FlagKey, string> = {
-  debugMode: 'Debug mode',
   syncConnection: 'Sync Connection',
   vizbeeSdk: 'Vizbee SDK',
   videoPlayer: 'Video Player',

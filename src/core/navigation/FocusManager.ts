@@ -1,5 +1,6 @@
 import { RemoteKeyService } from '@/core/input/RemoteKeyService';
 import { RemoteAction } from '@/core/input/keymaps';
+import { Logger } from '@/services/logger/Logger';
 
 // Spatial navigation: on UP/DOWN/LEFT/RIGHT, find the nearest focusable element
 // in that direction. Elements opt in via the `data-focusable` attribute.
@@ -31,6 +32,7 @@ export class FocusManager {
   // Within content (e.g., LEFT between cards) we *don't* want any memory —
   // pure spatial-nav-to-next-visible is the right behavior there.
   private lastContentFocus: HTMLElement | null = null;
+  private readonly log = new Logger('Focus');
 
   constructor(private readonly keys: RemoteKeyService) {}
 
@@ -61,6 +63,7 @@ export class FocusManager {
 
   setFocus(el: HTMLElement): void {
     if (this.current === el) return;
+    this.log.debug('focus', el.getAttribute('aria-label') || el.className || el.tagName);
     this.current?.classList.remove('is-focused');
     this.current?.setAttribute('tabindex', '-1');
     this.current = el;

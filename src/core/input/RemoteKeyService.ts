@@ -1,5 +1,6 @@
 import { EventEmitter } from '@/core/events/EventEmitter';
 import { PlatformAdapter } from '@/core/platform/PlatformAdapter';
+import { Logger } from '@/services/logger/Logger';
 import { getKeymap, RemoteAction } from './keymaps';
 
 type RemoteEvents = {
@@ -16,6 +17,7 @@ export class RemoteKeyService {
   private readonly keymap: Record<number, RemoteAction>;
   private bound = false;
   private readonly captureStack: CaptureHandler[] = [];
+  private readonly log = new Logger('RemoteKeys');
 
   constructor(platform: PlatformAdapter) {
     this.keymap = getKeymap(platform.name);
@@ -60,6 +62,7 @@ export class RemoteKeyService {
   dispatch(action: RemoteAction, originalEvent?: KeyboardEvent): void {
     const payload = { action, originalEvent: originalEvent ?? new KeyboardEvent('keydown') };
     const captured = this.captureStack[this.captureStack.length - 1];
+    this.log.debug('key', action, `code=${originalEvent?.keyCode ?? '-'}`, this.captureStack.length ? '(captured)' : '');
     if (captured) {
       captured(payload);
       return;

@@ -163,6 +163,7 @@ export class VizbeeService implements IVizbeeService {
 
   setVideo(meta: VizbeeVideoMeta, binding: VizbeePlayerBinding): void {
     if (!window.vizbee?.continuity) return;
+    this.log.debug('setVideo', { id: meta.id, title: meta.title, isLive: !!meta.isLive });
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       const adapter = new window.vizbee.continuity.adapters.PlayerAdapter();
@@ -191,6 +192,7 @@ export class VizbeeService implements IVizbeeService {
 
   setVideoStop(): void {
     if (!window.vizbee?.continuity) return;
+    this.log.debug('setVideoStop');
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.stopVideo();
