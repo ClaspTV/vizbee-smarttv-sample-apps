@@ -39,6 +39,10 @@ declare global {
   // Build-time stamp injected by Vite (see vite.config.ts → define). Shown in
   // Settings → Device so you can tell which deployed build is actually running.
   const __BUILD_TIME__: string;
+
+  // Name of the bundled Vizbee SDK npm package to import (npm builds), or ''
+  // for script builds. Injected by Vite (define), driven by VIZBEE_SDK_NPM_PACKAGE.
+  const __SDK_NPM_PACKAGE__: string;
 }
 
 export {};

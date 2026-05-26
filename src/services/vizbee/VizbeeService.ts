@@ -54,17 +54,34 @@ export class VizbeeService implements IVizbeeService {
 
   private async startWhenReady(appId: string): Promise<void> {
     const platform = services().platform.name;
-    const sdkUrl = this.resolveSdkUrl(platform);
-    if (!sdkUrl) {
-      this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
-      return;
-    }
+
+    // Load the SDK two ways depending on the build:
+    //  - npm build: bundle it from node_modules (build-time __SDK_NPM_PACKAGE__),
+    //    a side-effect import that populates window.vizbee.
+    //  - script build: inject the right SDK <script> URL for the platform.
     try {
-      await loadScript(sdkUrl);
+      if (__SDK_NPM_PACKAGE__) {
+        const loaded = await loadBundledSdk();
+        if (!loaded) {
+          this.log.warn('no bundled SDK for this build target; continuity disabled', {
+            pkg: __SDK_NPM_PACKAGE__,
+          });
+          return;
+        }
+        this.log.info('using bundled Vizbee SDK', { pkg: __SDK_NPM_PACKAGE__ });
+      } else {
+        const sdkUrl = this.resolveSdkUrl(platform);
+        if (!sdkUrl) {
+          this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
+          return;
+        }
+        await loadScript(sdkUrl);
+      }
     } catch (e) {
-      this.log.error('failed to load Vizbee SDK script', e);
+      this.log.error('failed to load Vizbee SDK', e);
       return;
     }
+
     const ok = await waitForSdk();
     if (!ok) {
       this.log.warn('SDK not available on window.vizbee; continuity disabled');
@@ -74,7 +91,7 @@ export class VizbeeService implements IVizbeeService {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.start(appId);
       ctx.getAppAdapter().setDeeplinkHandler((info: any) => this.onDeeplink(info));
-      this.log.info('continuity started', { appId, sdkUrl });
+      this.log.info('continuity started', { appId });
     } catch (e) {
       this.log.error('continuity start failed', e);
     }
@@ -218,6 +235,23 @@ const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizb
     'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native_es6.js',
   },
 };
+
+// Import the bundled SDK for npm builds. __SDK_NPM_PACKAGE__ is a build-time
+// constant (Vite define); the literal import is required so the bundler
+// includes the package, and the branch tree-shakes away in builds where the
+// constant is empty (script builds). Each package is a side-effect module that
+// populates window.vizbee. Add a branch per package as more ship.
+async function loadBundledSdk(): Promise<boolean> {
+  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-tizen-es5') {
+    await import('vizbee-qa-sdk-tizen-es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-lgwebos-es6') {
+    await import('vizbee-qa-sdk-lgwebos-es6');
+    return true;
+  }
+  return false;
+}
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {

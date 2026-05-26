@@ -48,6 +48,10 @@ function tizenWebapisScript(platform: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   const platform = PLATFORM_MODES.has(mode) ? mode : 'desktop';
+  // For the npm builds: the name of the bundled Vizbee SDK package to import
+  // (set by the ship:<platform>:npm:<module> scripts). Empty for script builds,
+  // which load the SDK via an external <script> at runtime instead.
+  const sdkNpmPackage = process.env.VIZBEE_SDK_NPM_PACKAGE ?? '';
 
   return {
     base: './',
@@ -55,6 +59,7 @@ export default defineConfig(({ mode }) => {
     // in Settings → Device). Each per-folder build gets its own timestamp.
     define: {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+      __SDK_NPM_PACKAGE__: JSON.stringify(sdkNpmPackage),
     },
     resolve: {
       alias: {
