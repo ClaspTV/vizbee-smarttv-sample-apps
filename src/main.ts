@@ -36,6 +36,7 @@ async function boot(): Promise<void> {
 
   // 2. Services that don't need platform-ready (load synchronously)
   const config = new ConfigService();
+  config.load();
   const flags = new FeatureFlagService();
   flags.load();
   if (flags.get('debugMode')) setLogLevel('debug');

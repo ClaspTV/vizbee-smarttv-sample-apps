@@ -1,5 +1,6 @@
 import { createToggle } from '@/components/Toggle';
 import { createRadioGroup, firstFocusableOption } from '@/components/RadioGroup';
+import { createTextField } from '@/components/TextField';
 import { showConfirmDialog } from '@/components/ConfirmDialog';
 import { buildLabel, currentBuild, targetUrl } from '@/core/platform/appBuild';
 import { services } from '@/services/ServiceContainer';
@@ -38,6 +39,19 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   const build = currentBuild(services().platform.name);
   const keys = Object.keys(DEFAULT_FLAGS) as FlagKey[];
   let firstFocus: HTMLElement | undefined;
+
+  // First option: the Vizbee App ID. It's read at boot by VizbeeService.init,
+  // so a change persists and reloads (like the SDK/build switches).
+  const appIdField = createTextField({
+    label: 'Vizbee App ID',
+    value: services().config.get().vizbeeAppId,
+    onCommit: (value) => {
+      services().config.setVizbeeAppId(value);
+      promptAppIdReload();
+    },
+  });
+  list.appendChild(appIdField);
+  firstFocus = appIdField;
 
   for (const key of keys) {
     // npmModule is surfaced through the build-aware "Vizbee SDK" row below,
@@ -96,6 +110,10 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   if (info.model) appendInfo(infoList, 'Model', info.model);
   if (info.version) appendInfo(infoList, 'Version', info.version);
   appendInfo(infoList, 'App', services().config.get().appName);
+  appendInfo(infoList, 'App Version', __APP_VERSION__);
+  appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
+  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on desktop.
+  appendInfo(infoList, 'SDK Version', window.VZB?.VERSION ?? '—');
   // Which build is actually running, where it loaded from, and when it was
   // built — so "deployed one, launched another" is verifiable at a glance.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
@@ -124,6 +142,18 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   });
 
   return () => off();
+}
+
+// The App ID is read once at boot by VizbeeService.init, so a change applies on
+// the next load. Offer an immediate reload; "Later" keeps it for next launch.
+function promptAppIdReload(): void {
+  showConfirmDialog({
+    title: 'Apply Vizbee App ID?',
+    message: 'The app will reload to start with the new App ID.',
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.reload(),
+  });
 }
 
 // The Vizbee SDK <script> is injected once at boot, so switching builds only

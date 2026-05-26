@@ -68,6 +68,15 @@ export class RemoteKeyService {
   }
 
   private handleKey = (e: KeyboardEvent): void => {
+    // Let editable elements own their keys (text typing, backspace, cursor, and
+    // the TV on-screen keyboard). Components that edit text put the field into
+    // an explicit "editing" state and exit it on ENTER/BACK, so we never get
+    // stuck — see TextField. Without this, e.g. Backspace (mapped to BACK)
+    // would never delete a character.
+    const el = e.target as HTMLElement | null;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
+      return;
+    }
     const action = this.keymap[e.keyCode];
     if (!action) return;
     e.preventDefault();

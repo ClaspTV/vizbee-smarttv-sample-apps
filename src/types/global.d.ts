@@ -30,6 +30,11 @@ declare global {
       [key: string]: unknown;
     };
     cast?: { framework?: unknown };
+    // The Vizbee SDK exposes its version here (window.VZB.VERSION) once loaded.
+    VZB?: {
+      VERSION?: string;
+      [key: string]: unknown;
+    };
   }
 
   // Xbox / UWP
@@ -43,6 +48,9 @@ declare global {
   // Name of the bundled Vizbee SDK npm package to import (npm builds), or ''
   // for script builds. Injected by Vite (define), driven by VIZBEE_SDK_NPM_PACKAGE.
   const __SDK_NPM_PACKAGE__: string;
+
+  // App version (from package.json), injected by Vite (define).
+  const __APP_VERSION__: string;
 }
 
 export {};
