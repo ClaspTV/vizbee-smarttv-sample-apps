@@ -1,6 +1,7 @@
 import { Logger } from '@/services/logger/Logger';
 import { findVideo, registerVideo } from '@/data/videos';
 import { services } from '@/services/ServiceContainer';
+import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
 import type { FeatureFlags } from '@/services/feature-flags/flags';
 
@@ -42,6 +43,10 @@ export class VizbeeService implements IVizbeeService {
   private readonly log = new Logger('VizbeeService');
   private initialized = false;
   private currentAdapter: any = null;
+  // The SDK <script> URL actually loaded (script builds only; null for npm /
+  // bundled builds, where the SDK has no S3 URL to date-stamp).
+  private loadedSdkUrl: string | null = null;
+  private deploymentDatePromise: Promise<string | null> | null = null;
 
   init(appId: string): void {
     if (this.initialized) {
@@ -75,6 +80,7 @@ export class VizbeeService implements IVizbeeService {
           this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
           return;
         }
+        this.loadedSdkUrl = sdkUrl;
         await loadScript(sdkUrl);
       }
     } catch (e) {
@@ -208,6 +214,23 @@ export class VizbeeService implements IVizbeeService {
   reset(): void {
     this.setVideoStop();
     this.initialized = false;
+  }
+
+  // The deployment date+time of the loaded continuity SDK, shown next to the
+  // version in Settings → Device. Memoised.
+  //  - script builds: the S3/CloudFront Last-Modified of the loaded <script>.
+  //  - npm builds: the SDK is bundled into the app, so its "deployment" moment
+  //    is when the app was built (__BUILD_TIME__).
+  // null only if neither applies or the header can't be read.
+  sdkDeploymentDate(): Promise<string | null> {
+    if (this.loadedSdkUrl) {
+      this.deploymentDatePromise ??= fetchSdkDeploymentDate(this.loadedSdkUrl);
+      return this.deploymentDatePromise;
+    }
+    if (__SDK_NPM_PACKAGE__) {
+      return Promise.resolve(formatSdkTimestamp(new Date(__BUILD_TIME__)));
+    }
+    return Promise.resolve(null);
   }
 }
 

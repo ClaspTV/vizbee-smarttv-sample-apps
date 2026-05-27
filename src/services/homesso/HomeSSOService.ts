@@ -1,5 +1,6 @@
 import { Logger } from '@/services/logger/Logger';
 import { services } from '@/services/ServiceContainer';
+import { fetchSdkDeploymentDate } from '@/services/sdkDeploymentDate';
 
 // The HomeSSO SDK is loaded as an external <script>, same model as the main
 // Vizbee SDK (VizbeeService). It's a side-effect bundle that self-registers
@@ -72,6 +73,8 @@ export class HomeSSOService {
   private shimmed = false;
   private variant: EsVariant | null = null;
   private version: string | null = null;
+  private loadedUrl: string | null = null;
+  private deploymentDatePromise: Promise<string | null> | null = null;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -86,8 +89,9 @@ export class HomeSSOService {
     }
 
     this.variant = resolveEsVariant();
+    this.loadedUrl = homeSSOUrl(this.variant);
     try {
-      await loadScript(homeSSOUrl(this.variant));
+      await loadScript(this.loadedUrl);
     } catch (e) {
       this.log.error('failed to load HomeSSO SDK', e);
       return;
@@ -109,6 +113,15 @@ export class HomeSSOService {
   // the VERSION export), and whether the SDK finished registering.
   status(): { ready: boolean; variant: EsVariant | null; version: string | null } {
     return { ready: this.ready, variant: this.variant, version: this.version };
+  }
+
+  // The deployment date (S3 Last-Modified) of the loaded HomeSSO bundle, shown
+  // next to the version in Settings → Device. Memoised; null until the SDK
+  // script URL is known, or if the header can't be read.
+  deploymentDate(): Promise<string | null> {
+    if (!this.loadedUrl) return Promise.resolve(null);
+    this.deploymentDatePromise ??= fetchSdkDeploymentDate(this.loadedUrl);
+    return this.deploymentDatePromise;
   }
 
   // Apply the Settings-selected toast style (DAZN vs SDK default) via the UI

@@ -159,18 +159,33 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   appendInfo(infoList, 'App', services().config.get().appName);
   appendInfo(infoList, 'App Version', __APP_VERSION__);
   appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
-  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on desktop.
-  appendInfo(infoList, 'SDK Version', window.VZB?.VERSION ?? '—');
-  // HomeSSO SDK: version + ES variant (variant mirrors the Vizbee SDK
-  // selection). Reads window.vizbee.homesso.VERSION; bundles predating that
-  // export report "unknown". '—' before it loads, "loading…" while registering.
-  const sso = services().homeSSO.status();
-  let ssoValue = '—';
-  if (sso.variant) {
-    const ver = sso.ready ? (sso.version ?? 'unknown') : 'loading…';
-    ssoValue = `${ver} (${sso.variant.toUpperCase()})`;
+  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on
+  // desktop. The deployment date (S3 Last-Modified) is fetched async and
+  // appended in brackets, e.g. "7.8.35 (May 27, 2026)".
+  const sdkVersion = window.VZB?.VERSION ?? null;
+  const sdkDd = appendInfo(infoList, 'SDK Version', sdkVersion ?? '—');
+  if (sdkVersion) {
+    void services().vizbee.sdkDeploymentDate().then((date) => {
+      if (date) sdkDd.textContent = `${sdkVersion} (${date})`;
+    });
   }
-  appendInfo(infoList, 'HomeSSO SDK', ssoValue);
+  // HomeSSO SDK: version + deployment date (in brackets) + ES variant (which
+  // mirrors the Vizbee SDK selection). Reads window.vizbee.homesso.VERSION;
+  // bundles predating that export report "unknown". '—' before it loads,
+  // "loading…" while registering. Date arrives async (see below).
+  const sso = services().homeSSO.status();
+  const buildSsoValue = (date: string | null): string => {
+    if (!sso.variant) return '—';
+    const ver = sso.ready ? (sso.version ?? 'unknown') : 'loading…';
+    const datePart = date ? ` (${date})` : '';
+    return `${ver}${datePart} · ${sso.variant.toUpperCase()}`;
+  };
+  const ssoDd = appendInfo(infoList, 'HomeSSO SDK', buildSsoValue(null));
+  if (sso.variant && sso.ready) {
+    void services().homeSSO.deploymentDate().then((date) => {
+      if (date) ssoDd.textContent = buildSsoValue(date);
+    });
+  }
   // Which build is actually running, where it loaded from, and when it was
   // built — so "deployed one, launched another" is verifiable at a glance.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
@@ -273,11 +288,14 @@ function promptModuleSwitch(value: string): void {
   });
 }
 
-function appendInfo(parent: HTMLElement, label: string, value: string): void {
+// Returns the value cell so callers can patch it later (e.g. appending an
+// SDK deployment date once its async fetch resolves).
+function appendInfo(parent: HTMLElement, label: string, value: string): HTMLElement {
   const dt = document.createElement('dt');
   dt.textContent = label;
   const dd = document.createElement('dd');
   dd.textContent = value;
   parent.appendChild(dt);
   parent.appendChild(dd);
+  return dd;
 }
