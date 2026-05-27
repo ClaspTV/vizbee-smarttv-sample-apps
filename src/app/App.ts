@@ -45,5 +45,10 @@ export function startApp(root: HTMLElement, router: Router): void {
     services().vizbee.init(services().config.get().vizbeeAppId);
   }
 
+  // HomeSSO modal preview: load the HomeSSO SDK so the Settings toggles can
+  // trigger its sign-in toasts with dummy data. Runs on every platform
+  // (including desktop) so the modal UI can be previewed during local dev.
+  void services().homeSSO.init();
+
   router.start('/home');
 }
