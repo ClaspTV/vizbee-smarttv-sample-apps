@@ -359,3 +359,151 @@
   border-color: var(--color-accent);
   box-shadow: var(--shadow-focus);
 }
+
+/* --- DebugOverlay ------------------------------------------------------- */
+/* On-screen log readout shown in Debug mode. Non-interactive (pointer-events:
+ * none, not focusable) so it never affects spatial nav. */
+
+.debug-overlay {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  width: 46%;
+  max-height: 42%;
+  margin: var(--space-2);
+  padding: var(--space-2);
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--color-success);
+  background: rgba(7, 9, 12, 0.82);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+/* --- TextField ---------------------------------------------------------- */
+/* Read-only settings row (label + value). ENTER opens the modal editor. */
+
+.text-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med),
+    border-color var(--transition-fast);
+}
+
+.text-field__label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.text-field__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-field.is-focused {
+  transform: scale(1.02);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+.text-field.is-focused .text-field__value {
+  color: var(--color-text);
+}
+
+/* --- ConfirmDialog ------------------------------------------------------ */
+/* Full-screen scrim + centered card. While open, RemoteKeyService captures
+ * input (see ConfirmDialog.ts) so the page behind can't act on BACK/ENTER. */
+
+.confirm-overlay {
+  /* Explicit edges, not `inset: 0` — `inset` shorthand isn't supported on
+   * older TV Chromium (webOS/Tizen), where it would collapse the fixed overlay
+   * to zero size and the dialog would never appear. */
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--safe-area-y) var(--safe-area-x);
+  background: var(--color-overlay);
+}
+@supports (backdrop-filter: blur(8px)) {
+  .confirm-overlay {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+.confirm-dialog {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-deep);
+}
+
+.confirm-dialog__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.confirm-dialog__message {
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-muted);
+}
+
+.confirm-dialog__input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-lg);
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+.confirm-dialog__input:focus {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

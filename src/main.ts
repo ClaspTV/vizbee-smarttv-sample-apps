@@ -13,7 +13,9 @@ import './features/player/player.css';
 import './features/settings/settings.css';
 
 import { PlatformFactory } from './core/platform/PlatformFactory';
+import { redirectToSelectedBuild, buildLabel } from './core/platform/appBuild';
 import { RemoteKeyService } from './core/input/RemoteKeyService';
+import { HardwareBackButton } from './core/input/HardwareBackButton';
 import { FocusManager } from './core/navigation/FocusManager';
 import { LifecycleManager } from './core/lifecycle/LifecycleManager';
 import { ConfigService } from './services/config/ConfigService';
@@ -34,10 +36,31 @@ async function boot(): Promise<void> {
 
   // 2. Services that don't need platform-ready (load synchronously)
   const config = new ConfigService();
+  config.load();
   const flags = new FeatureFlagService();
   flags.load();
-  if (flags.get('debugMode')) setLogLevel('debug');
-  else setLogLevel('info');
+
+  // Debug/remote logging is disabled for now. The plumbing (DebugOverlay,
+  // PubNubLogger, Logger sinks, log.debug traces) is kept for a future secure
+  // re-enable; logs stay at 'info' so the verbose debug traces don't print.
+  setLogLevel('info');
+
+  // If a different app build (script vs npm) is selected, hop to its hosted URL
+  // before doing any further work. webOS/Tizen only; same CloudFront origin, so
+  // the flag persists across the load. Returning stops this build from booting.
+  if (redirectToSelectedBuild(platform.name, flags.get('appBuild'), flags.get('npmModule'))) {
+    log.info('redirecting to selected app build', {
+      appBuild: flags.get('appBuild'),
+      npmModule: flags.get('npmModule'),
+    });
+    return;
+  }
+
+  log.info('app build', {
+    build: buildLabel(platform.name),
+    source: `${window.location.origin}${window.location.pathname}`,
+    builtAt: __BUILD_TIME__,
+  });
 
   const remoteKeys = new RemoteKeyService(platform);
   const focus = new FocusManager(remoteKeys);
@@ -82,6 +105,12 @@ async function boot(): Promise<void> {
   if (!rootEl) throw new Error('#app element not found');
   installViewportScale();
   startApp(rootEl, router);
+
+  // webOS delivers the remote BACK as a history popstate (not a keydown) and
+  // exits the app at the history root. Seed the sentinel + popstate→BACK bridge
+  // *after* the first route is set so the logical BACK handlers (e.g. the Home
+  // exit confirm) catch it instead of the OS closing the app.
+  new HardwareBackButton(remoteKeys).start();
 }
 
 // Uniform viewport scaling: design once at 1920x1080 and let CSS transform

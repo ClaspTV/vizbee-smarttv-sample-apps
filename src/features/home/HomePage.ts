@@ -1,6 +1,7 @@
 import { VIDEOS, VideoInfo } from '@/data/videos';
 import { createVideoCard } from '@/components/VideoCard';
 import { createFocusableButton } from '@/components/FocusableButton';
+import { showConfirmDialog } from '@/components/ConfirmDialog';
 import { services } from '@/services/ServiceContainer';
 
 // Layout: full-bleed hero (mirrors the focused card) + horizontal carousel.
@@ -120,9 +121,18 @@ export function renderHomePage(root: HTMLElement): () => void {
   // Initial focus on the hero CTA.
   services().focus.setFocus(playBtn);
 
-  // BACK on Home: exit the app (real app would show a confirm dialog first).
+  // BACK on Home is the app's root exit point — confirm first so an accidental
+  // press doesn't drop the user out. Defaults focus to "Stay" for safety.
   const offBack = services().remoteKeys.on(({ action }) => {
-    if (action === 'BACK') services().platform.exit();
+    if (action !== 'BACK') return;
+    showConfirmDialog({
+      title: 'Exit app?',
+      message: 'Are you sure you want to close the app?',
+      confirmLabel: 'Exit',
+      cancelLabel: 'Stay',
+      defaultFocus: 'cancel',
+      onConfirm: () => services().platform.exit(),
+    });
   });
 
   return () => {

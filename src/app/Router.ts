@@ -1,9 +1,18 @@
 import { Logger } from '@/services/logger/Logger';
+import { EventEmitter } from '@/core/events/EventEmitter';
 
-// Hash-based router. Three pages: #/home, #/player/:id, #/settings.
-// Each page registers an enter handler returning a teardown.
-// Why not history API: TVs often run from file:// or have weird base URLs;
-// hash routing avoids HTML5 history pitfalls.
+// In-memory router. Navigation renders the matched page and notifies
+// subscribers — it does NOT touch browser history or location.hash.
+//
+// Why: on TVs the hardware BACK button is delivered as a browser history-back
+// (a `popstate`), which HardwareBackButton owns and translates into a logical
+// BACK action. If the router also pushed/popped history (the old hash-based
+// design), hardware BACK and route changes fought each other — a back press
+// fired both a hashchange (router re-render) and a popstate (BACK dispatch),
+// landing the user on Home and popping the exit dialog from any page. Keeping
+// routing in-memory makes BACK behave identically on every platform.
+//
+// The launch URL hash is read once for an initial deep link, then ignored.
 
 export type RouteHandler = (params: Record<string, string>) => () => void;
 
@@ -13,9 +22,15 @@ interface Route {
   handler: RouteHandler;
 }
 
+type RouterEvents = {
+  change: { path: string };
+};
+
 export class Router {
   private readonly routes: Route[] = [];
   private currentTeardown: (() => void) | null = null;
+  private currentPath = '';
+  private readonly emitter = new EventEmitter<RouterEvents>();
   private readonly log = new Logger('Router');
 
   register(path: string, handler: RouteHandler): void {
@@ -32,30 +47,36 @@ export class Router {
   }
 
   start(defaultPath = '/home'): void {
-    window.addEventListener('hashchange', this.resolve);
-    if (!window.location.hash || window.location.hash === '#') {
-      window.location.hash = defaultPath;
-    } else {
-      this.resolve();
-    }
+    this.go(this.pathFromLaunchHash() ?? defaultPath);
   }
 
   navigate(path: string): void {
-    window.location.hash = path;
+    this.go(path);
   }
 
   back(defaultPath = '/home'): void {
-    // We don't track history depth here; just go to default.
-    // For richer back behavior, swap in a small stack.
-    if (window.location.hash !== `#${defaultPath}`) {
-      this.navigate(defaultPath);
-    }
+    // No history stack to pop; "back" is just a navigate to the default route.
+    if (this.currentPath !== defaultPath) this.go(defaultPath);
   }
 
-  private resolve = (): void => {
-    const path = window.location.hash.replace(/^#/, '') || '/home';
-    this.log.info('navigate', path);
+  getCurrentPath(): string {
+    return this.currentPath;
+  }
 
+  /** Notified after every successful navigation (e.g., NavMenu highlight). */
+  onChange(listener: (e: RouterEvents['change']) => void): () => void {
+    return this.emitter.on('change', listener);
+  }
+
+  // Initial deep link from the launch URL only (e.g., desktop `#/settings`,
+  // or a relaunch URL). Vizbee deeplinks arrive via the SDK → navigate().
+  private pathFromLaunchHash(): string | null {
+    const h = window.location.hash.replace(/^#/, '');
+    return h && h !== '/' ? h : null;
+  }
+
+  private go(path: string): void {
+    this.log.info('navigate', path);
     for (const route of this.routes) {
       const match = route.pattern.exec(path);
       if (match) {
@@ -65,10 +86,11 @@ export class Router {
         });
         this.currentTeardown?.();
         this.currentTeardown = route.handler(params);
+        this.currentPath = path;
+        this.emitter.emit('change', { path });
         return;
       }
     }
-
     this.log.warn('no route matched', path);
-  };
+  }
 }

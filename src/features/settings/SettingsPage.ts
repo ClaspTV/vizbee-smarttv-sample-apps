@@ -1,5 +1,8 @@
 import { createToggle } from '@/components/Toggle';
 import { createRadioGroup, firstFocusableOption } from '@/components/RadioGroup';
+import { createTextField } from '@/components/TextField';
+import { showConfirmDialog } from '@/components/ConfirmDialog';
+import { buildLabel, currentBuild, targetUrl } from '@/core/platform/appBuild';
 import { services } from '@/services/ServiceContainer';
 import { DEFAULT_FLAGS, FLAG_LABELS, FLAG_OPTIONS, FlagKey } from '@/services/feature-flags/flags';
 
@@ -33,12 +36,34 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   list.className = 'settings-list';
 
   const flags = services().flags;
+  const build = currentBuild(services().platform.name);
   const keys = Object.keys(DEFAULT_FLAGS) as FlagKey[];
   let firstFocus: HTMLElement | undefined;
 
+  // First option: the Vizbee App ID. It's read at boot by VizbeeService.init,
+  // so a change persists and reloads (like the SDK/build switches).
+  const appIdField = createTextField({
+    label: 'Vizbee App ID',
+    value: services().config.get().vizbeeAppId,
+    onCommit: (value) => {
+      services().config.setVizbeeAppId(value);
+      promptAppIdReload();
+    },
+  });
+  list.appendChild(appIdField);
+  firstFocus = appIdField;
+
   for (const key of keys) {
-    const current = flags.get(key);
-    const options = FLAG_OPTIONS[key];
+    // npmModule is surfaced through the build-aware "Vizbee SDK" row below,
+    // not as its own row.
+    if (key === 'npmModule') continue;
+
+    // Build-aware "Vizbee SDK" row: the script build picks the SDK <script>
+    // variant (vizbeeSdk); the npm build picks which bundled module to load
+    // (npmModule → …/es5 vs /es6). Same row + label, different options/flag.
+    const optionsKey: FlagKey = key === 'vizbeeSdk' && build === 'npm' ? 'npmModule' : key;
+    const current = flags.get(optionsKey);
+    const options = FLAG_OPTIONS[optionsKey];
     let row: HTMLElement;
     let initialFocus: HTMLElement | undefined;
     if (options && typeof current === 'string') {
@@ -47,13 +72,20 @@ export function renderSettingsPage(root: HTMLElement): () => void {
         options,
         initialValue: current,
         // Cast: set's overload narrows per key, but the loop's K is widened.
-        onChange: (value) => flags.set(key, value as never),
+        onChange: (value) => {
+          flags.set(optionsKey, value as never);
+          if (optionsKey === 'vizbeeSdk') promptSdkReload(value);
+          else if (optionsKey === 'npmModule') promptModuleSwitch(value);
+          else if (optionsKey === 'appBuild') promptBuildSwitch(value);
+        },
       });
       initialFocus = firstFocusableOption(row);
     } else {
+      // Toggle path (boolean flags). No boolean flags exist right now, so this
+      // is currently unused — Boolean() keeps it valid for when one is added.
       row = createToggle({
         label: FLAG_LABELS[key],
-        initialValue: current as boolean,
+        initialValue: Boolean(current),
         onChange: (value) => flags.set(key, value as never),
       });
       initialFocus = row;
@@ -65,9 +97,9 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   section.appendChild(sectionTitle);
   section.appendChild(list);
 
-  // Section: Device info
+  // Section: Device info (right-hand column — see .settings-body)
   const infoSection = document.createElement('section');
-  infoSection.className = 'settings-section';
+  infoSection.className = 'settings-section settings-section--device';
 
   const infoTitle = document.createElement('h2');
   infoTitle.className = 'settings-section__title';
@@ -80,13 +112,27 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   if (info.model) appendInfo(infoList, 'Model', info.model);
   if (info.version) appendInfo(infoList, 'Version', info.version);
   appendInfo(infoList, 'App', services().config.get().appName);
+  appendInfo(infoList, 'App Version', __APP_VERSION__);
+  appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
+  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on desktop.
+  appendInfo(infoList, 'SDK Version', window.VZB?.VERSION ?? '—');
+  // Which build is actually running, where it loaded from, and when it was
+  // built — so "deployed one, launched another" is verifiable at a glance.
+  appendInfo(infoList, 'Build', buildLabel(info.platform));
+  appendInfo(infoList, 'Source', `${window.location.origin}${window.location.pathname}`);
+  appendInfo(infoList, 'Built', __BUILD_TIME__);
 
   infoSection.appendChild(infoTitle);
   infoSection.appendChild(infoList);
 
+  // Two-column body: feature flags on the left, device info on the right.
+  const body = document.createElement('div');
+  body.className = 'settings-body';
+  body.appendChild(section);
+  body.appendChild(infoSection);
+
   page.appendChild(header);
-  page.appendChild(section);
-  page.appendChild(infoSection);
+  page.appendChild(body);
   root.appendChild(page);
 
   // Initial focus on the first focusable element in the flags list.
@@ -98,6 +144,72 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   });
 
   return () => off();
+}
+
+// The App ID is read once at boot by VizbeeService.init, so a change applies on
+// the next load. Offer an immediate reload; "Later" keeps it for next launch.
+function promptAppIdReload(): void {
+  showConfirmDialog({
+    title: 'Apply Vizbee App ID?',
+    message: 'The app will reload to start with the new App ID.',
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.reload(),
+  });
+}
+
+// The Vizbee SDK <script> is injected once at boot, so switching builds only
+// takes effect on a fresh load. Offer an immediate reload to apply the picked
+// build now; "Later" keeps the selection (persisted) for the next launch.
+function promptSdkReload(value: string): void {
+  const label = (FLAG_OPTIONS.vizbeeSdk?.find((o) => o.value === value)?.label ?? '')
+    .replace(/^Use\s+/, '') || 'The selected SDK';
+  showConfirmDialog({
+    title: 'Reload to apply SDK?',
+    message: `Switching to "${label}" takes effect after a reload. Reload now?`,
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.reload(),
+  });
+}
+
+// The script and npm builds are separate apps at different hosted URLs, so
+// switching means reloading into the other URL (not an in-place reload). Only
+// possible when hosted on webOS/Tizen; off-device buildUrl() returns null and
+// the selection just persists for the next hosted launch (applied at boot).
+function promptBuildSwitch(value: string): void {
+  // Switching to npm lands on the currently-selected module folder (es5/es6).
+  const target = targetUrl(
+    services().platform.name,
+    value as 'script' | 'npm',
+    services().flags.get('npmModule'),
+  );
+  if (!target) return;
+  const label = (FLAG_OPTIONS.appBuild?.find((o) => o.value === value)?.label ?? '')
+    .replace(/^Use\s+/, '') || 'the selected build';
+  showConfirmDialog({
+    title: 'Switch app build?',
+    message: `The app will reload into "${label}". Reload now?`,
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.replace(target),
+  });
+}
+
+// npm build only: switching ES5 ⇄ ES6 reloads into the other module folder
+// (…/webos-with-nodemodule/es5 vs /es6) — separate hosted apps, so a redirect.
+function promptModuleSwitch(value: string): void {
+  const target = targetUrl(services().platform.name, 'npm', value as 'es5' | 'es6');
+  if (!target) return;
+  const label = (FLAG_OPTIONS.npmModule?.find((o) => o.value === value)?.label ?? '')
+    .replace(/^Use\s+/, '') || 'the selected module';
+  showConfirmDialog({
+    title: 'Switch module?',
+    message: `The app will reload into "${label}". Reload now?`,
+    confirmLabel: 'Reload now',
+    cancelLabel: 'Later',
+    onConfirm: () => window.location.replace(target),
+  });
 }
 
 function appendInfo(parent: HTMLElement, label: string, value: string): void {

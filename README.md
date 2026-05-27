@@ -138,6 +138,7 @@ npm run debug:webos        # opens Chrome DevTools against the running webOS app
 | [docs/features.md](docs/features.md) | Home / Player / Settings · feature-flag system · Vizbee SDK seam · roadmap |
 | [docs/ux-ui.md](docs/ux-ui.md) | Design system · TV-grade focus model · motion principles · component anatomy · accessibility |
 | [docs/platforms.md](docs/platforms.md) | Per-platform: detection rule, key codes, packaging, lifecycle quirks, gotchas |
+| [docs/vizbee-sdk.md](docs/vizbee-sdk.md) | SDK build variants (full/light × ES5/ES6) · per-platform URLs · switching builds · reload-to-apply |
 | [docs/development.md](docs/development.md) | Local workflow · debugging on real TVs · adding a platform / flag / page · style guidelines |
 
 ## Code map
@@ -218,6 +219,22 @@ setVideo(video: VizbeeVideoInfo): void {
 
 Pages and components don't change. See [docs/features.md](docs/features.md#vizbee-sdk-seam)
 for the full integration recipe.
+
+### SDK build variants (full/light × ES5/ES6)
+
+The SDK is loaded as a `<script>` at boot — not an npm package. On **Tizen** and
+**webOS** you can pick which build loads: **full** (CDN v7) or **light**
+(Vizbee-TV continuity build), each in an **ES5** or **ES6** target — four options
+in total, defaulting to `light-es5`. Vizio and Xbox use a single CDN build.
+
+```
+Settings → "Vizbee SDK"        # radio: Full/Light × ES5/ES6 (reloads to apply)
+?ff_vizbeeSdk=light-es6        # per-launch QA override
+```
+
+The choice persists in `localStorage`; since the SDK script loads once at launch,
+changing it prompts a reload. Full reference (URLs per platform/variant, code
+map): [docs/vizbee-sdk.md](docs/vizbee-sdk.md).
 
 ## License
 

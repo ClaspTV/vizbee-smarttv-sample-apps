@@ -65,8 +65,8 @@ Implementation: [`src/components/NavMenu.ts`](../src/components/NavMenu.ts)
 - **Carousel** ("Continue exploring") with all 3 videos, horizontal scroll
   + scroll-snap. Spatial focus moves naturally between hero buttons and
   cards via D-pad.
-- **BACK** on Home triggers `platform.exit()` (in a real app, you'd show
-  a "Are you sure?" dialog first).
+- **BACK** on Home opens an **"Exit app?"** confirmation (focus defaults to
+  *Stay* so an accidental press is safe); confirming calls `platform.exit()`.
 
 ### Player (`/player/:id`)
 
@@ -131,9 +131,10 @@ The Player calls `vizbee.setVideo({...})` on entry and
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- All flags from [`flags.ts`](../src/services/feature-flags/flags.ts)
-  render as toggle rows.
-- Toggling persists immediately to `localStorage`.
+- All flags from [`flags.ts`](../src/services/feature-flags/flags.ts) render
+  automatically — boolean flags as toggles, enum flags as radio groups.
+- Changes persist immediately to `localStorage`. Selecting a new **Vizbee SDK**
+  build additionally prompts a reload (the SDK script loads once at boot).
 - Device-info pulls live from the active platform adapter
   (`platform.getDeviceInfo()`).
 
@@ -144,16 +145,20 @@ The Player calls `vizbee.setVideo({...})` on entry and
 ### Resolution order (highest priority wins)
 
 ```
-URL param (?ff_<key>=true)
+URL param (?ff_<key>=value)
   ↓
-localStorage (vsw.flags.v1)
+localStorage (vsw.flags.v2)
   ↓
 DEFAULT_FLAGS in flags.ts
 ```
 
 URL params **don't persist**: they override only for the current page-load.
-Settings-page toggles persist. This split is intentional: QA can pin a flag
+Settings-page changes persist. This split is intentional: QA can pin a flag
 per-load without polluting the device's saved state.
+
+Both boolean and enum flags work as URL overrides: `?ff_debugMode=true`,
+`?ff_vizbeeSdk=light-es6`. Enum values are validated against the flag's options
+(`FLAG_OPTIONS`) — an unknown value is ignored rather than applied.
 
 ### Reading a flag
 
@@ -181,10 +186,10 @@ One file, three lines:
 ```ts
 // src/services/feature-flags/flags.ts
 export interface FeatureFlags {
-  autoplay: boolean;
   debugMode: boolean;
-  useShakaPlayer: boolean;
-  enableVizbee: boolean;
+  syncConnection: 'pubnub' | 'local';
+  vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
+  videoPlayer: 'html';
   myNewFlag: boolean;             // ← add
 }
 
@@ -199,17 +204,26 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
 };
 ```
 
-Settings page renders it automatically; `?ff_myNewFlag=true` works
-automatically; `services().flags.get('myNewFlag')` is type-checked.
+Settings page renders it automatically (a toggle for booleans);
+`?ff_myNewFlag=true` works automatically; `services().flags.get('myNewFlag')` is
+type-checked.
+
+For an **enum flag**, type it as a string union and add a matching
+`FLAG_OPTIONS[key]` array of `{ value, label }`. It then renders as a radio
+group, and its URL overrides are validated against those values.
 
 ### Built-in flags (this sample)
 
-| Flag | Default | Effect |
+| Flag | Type / default | Effect |
 |---|---|---|
-| `autoplay` | `false` | Player auto-plays on entry (muted, per browser policy). |
-| `debugMode` | `false` | Sets logger to `debug` level. |
-| `useShakaPlayer` | `false` | Reserved — for swapping `<video>` with Shaka. |
-| `enableVizbee` | `true` | Calls `vizbee.init()` on boot and `vizbee.setVideo()` in player. Toggle off to test "Vizbee disabled" path. |
+| `syncConnection` | `pubnub` \| `local` · `pubnub` | Continuity transport choice. Surfaced in Settings; reserved — not yet consumed by the SDK seam. |
+| `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. **Build-aware "Vizbee SDK" row:** these options show on the **script** build; on the **npm** build the row shows `npmModule` (ES5/ES6) instead. See [vizbee-sdk.md](vizbee-sdk.md). |
+| `videoPlayer` | `html` · `html` | Player implementation. Single HTML `<video>` option today; reserved for adding alternatives. |
+| `appBuild` | `script` \| `npm` · `script` | Which hosted app build to run — `script` (external-`<script>` SDK, `…/webos/`) vs `npm` (node_modules-bundled SDK, `…/webos-with-nodemodule/<module>/`). Selecting it reloads into that build's URL on webOS/Tizen (same origin, so the flag carries over). No-op on desktop/dev. See [`appBuild.ts`](../src/core/platform/appBuild.ts). |
+| `npmModule` | `es5` \| `es6` · `es5` | npm build only: which bundled module folder to load (`…/webos-with-nodemodule/es5` vs `/es6`). Has no row of its own — it's the build-aware "Vizbee SDK" row when running the npm build. Selecting it redirects to that module's URL. |
+
+Enum-typed flags (those with entries in `FLAG_OPTIONS`) render as a **radio
+group**; boolean flags render as a **toggle**.
 
 ## Vizbee SDK seam
 

@@ -1,5 +1,10 @@
 import { defineConfig, Plugin } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
+import { readFileSync } from 'node:fs';
+
+const APP_VERSION: string = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+).version;
 
 // Per-platform builds. `vite build --mode <platform>` produces dist/<platform>/
 // containing only that platform's adapter. The mode string is replaced inline
@@ -48,9 +53,20 @@ function tizenWebapisScript(platform: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   const platform = PLATFORM_MODES.has(mode) ? mode : 'desktop';
+  // For the npm builds: the name of the bundled Vizbee SDK package to import
+  // (set by the ship:<platform>:npm:<module> scripts). Empty for script builds,
+  // which load the SDK via an external <script> at runtime instead.
+  const sdkNpmPackage = process.env.VIZBEE_SDK_NPM_PACKAGE ?? '';
 
   return {
     base: './',
+    // Build-time stamp so the running app can report which build it is (shown
+    // in Settings → Device). Each per-folder build gets its own timestamp.
+    define: {
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+      __SDK_NPM_PACKAGE__: JSON.stringify(sdkNpmPackage),
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

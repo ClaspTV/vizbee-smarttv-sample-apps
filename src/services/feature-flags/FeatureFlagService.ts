@@ -1,15 +1,17 @@
 import { EventEmitter } from '@/core/events/EventEmitter';
 import { Logger } from '@/services/logger/Logger';
-import { DEFAULT_FLAGS, FeatureFlags, FlagKey } from './flags';
+import { DEFAULT_FLAGS, FeatureFlags, FlagKey, FlagValue, FLAG_OPTIONS } from './flags';
 
-const STORAGE_KEY = 'vsw.flags.v1';
+// Bumped to v2: `vizbeeSdk` values changed from full|light to the 4-way
+// full/light × ES5/ES6 set. Stale v1 values would no longer match an option.
+const STORAGE_KEY = 'vsw.flags.v2';
 
 type FlagEvents = {
   change: { key: FlagKey; value: FeatureFlags[FlagKey] };
 };
 
 // Persistence: localStorage by default.
-// Override priority (highest wins): URL params (?ff_<key>=true) > localStorage > defaults.
+// Override priority (highest wins): URL params (?ff_<key>=value) > localStorage > defaults.
 // Subscribers get notified on toggle so the Settings page can re-render
 // without polling.
 export class FeatureFlagService {
@@ -46,8 +48,10 @@ export class FeatureFlagService {
     this.emitter.emit('change', { key, value });
   }
 
+  // Flip a boolean flag. Cast: set's value is narrowed to FeatureFlags[K], but
+  // there are no boolean flags right now, so widen for this generic helper.
   toggle(key: FlagKey): void {
-    this.set(key, !this.flags[key]);
+    this.set(key, !this.flags[key] as never);
   }
 
   on(listener: (e: FlagEvents['change']) => void): () => void {
@@ -67,14 +71,33 @@ export class FeatureFlagService {
     try {
       const params = new URLSearchParams(window.location.search);
       for (const key of Object.keys(DEFAULT_FLAGS) as FlagKey[]) {
-        const v = params.get(`ff_${key}`);
-        if (v !== null) {
-          (overrides as Record<string, boolean>)[key] = v === 'true' || v === '1';
+        const raw = params.get(`ff_${key}`);
+        if (raw === null) continue;
+        const value = this.coerceOverride(key, raw);
+        if (value !== undefined) {
+          (overrides as Record<string, FlagValue>)[key] = value;
         }
       }
     } catch {
       /* ignore */
     }
     return overrides;
+  }
+
+  // Convert a raw ?ff_<key>= string to the flag's typed value. Boolean flags
+  // accept true/1 (anything else is false). Enum/string flags must match one
+  // of the values declared in FLAG_OPTIONS — an unknown value is ignored
+  // (returns undefined) so a stray query param can't push a flag into a state
+  // the UI can't represent (e.g. ff_vizbeeSdk=foo).
+  private coerceOverride(key: FlagKey, raw: string): FlagValue | undefined {
+    if (typeof DEFAULT_FLAGS[key] === 'boolean') {
+      return raw === 'true' || raw === '1';
+    }
+    const allowed = FLAG_OPTIONS[key];
+    if (!allowed || allowed.some((o) => o.value === raw)) {
+      return raw as FlagValue;
+    }
+    this.log.warn('ignoring invalid flag override', { key, value: raw });
+    return undefined;
   }
 }

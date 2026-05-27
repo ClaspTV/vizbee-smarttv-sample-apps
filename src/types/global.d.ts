@@ -30,11 +30,27 @@ declare global {
       [key: string]: unknown;
     };
     cast?: { framework?: unknown };
+    // The Vizbee SDK exposes its version here (window.VZB.VERSION) once loaded.
+    VZB?: {
+      VERSION?: string;
+      [key: string]: unknown;
+    };
   }
 
   // Xbox / UWP
   // Defined globally on Windows TVs; declared loosely here.
   const Windows: unknown;
+
+  // Build-time stamp injected by Vite (see vite.config.ts → define). Shown in
+  // Settings → Device so you can tell which deployed build is actually running.
+  const __BUILD_TIME__: string;
+
+  // Name of the bundled Vizbee SDK npm package to import (npm builds), or ''
+  // for script builds. Injected by Vite (define), driven by VIZBEE_SDK_NPM_PACKAGE.
+  const __SDK_NPM_PACKAGE__: string;
+
+  // App version (from package.json), injected by Vite (define).
+  const __APP_VERSION__: string;
 }
 
 export {};

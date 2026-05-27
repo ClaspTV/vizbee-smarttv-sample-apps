@@ -72,6 +72,13 @@ export function renderPlayerPage(
     else videoEl.pause();
   };
 
+  // Leave the player and return to the previous screen (Home). Shared by the
+  // STOP/BACK keys and the end-of-playback handler below.
+  const exitPlayer = (): void => {
+    services().vizbee.setVideoStop();
+    services().router.back('/home');
+  };
+
   services().vizbee.setVideo(
     {
       id: video.id,
@@ -141,6 +148,11 @@ export function renderPlayerPage(
   videoEl.addEventListener('play', syncPlayLabel);
   videoEl.addEventListener('pause', syncPlayLabel);
 
+  // VOD finished — return to the previous page automatically. (Live streams
+  // don't fire 'ended', so this is a no-op for them.)
+  const onEnded = (): void => exitPlayer();
+  videoEl.addEventListener('ended', onEnded);
+
   // Auto-hide overlay after a few seconds of no input.
   let hideTimer: number | undefined;
   const showOverlay = (): void => {
@@ -197,8 +209,7 @@ export function renderPlayerPage(
         break;
       case 'STOP':
       case 'BACK':
-        services().vizbee.setVideoStop();
-        services().router.back('/home');
+        exitPlayer();
         break;
       default:
         break;
@@ -212,6 +223,7 @@ export function renderPlayerPage(
     videoEl.pause();
     videoEl.removeEventListener('play', syncPlayLabel);
     videoEl.removeEventListener('pause', syncPlayLabel);
+    videoEl.removeEventListener('ended', onEnded);
     detachSource();
     videoEl.removeAttribute('src');
     videoEl.load();

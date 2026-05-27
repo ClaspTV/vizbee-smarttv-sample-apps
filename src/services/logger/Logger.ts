@@ -15,6 +15,26 @@ export function setLogLevel(level: LogLevel): void {
   _minLevel = level;
 }
 
+export interface LogEntry {
+  level: LogLevel;
+  tag: string;
+  args: unknown[];
+  time: number;
+}
+
+type LogSink = (entry: LogEntry) => void;
+const _sinks = new Set<LogSink>();
+
+// Subscribe to emitted log entries (those that pass the level filter). Powers
+// the on-screen DebugOverlay so logs are visible on a TV without attaching a
+// remote inspector. Returns an unsubscribe fn.
+export function addLogSink(sink: LogSink): () => void {
+  _sinks.add(sink);
+  return () => {
+    _sinks.delete(sink);
+  };
+}
+
 export class Logger {
   constructor(private readonly tag: string) {}
 
@@ -41,5 +61,16 @@ export class Logger {
         ? console.warn
         : console.log;
     fn(prefix, ...args);
+    // Mirror to sinks (on-screen overlay) — only emitted (level-passing) lines.
+    if (_sinks.size) {
+      const entry: LogEntry = { level, tag: this.tag, args, time: Date.now() };
+      _sinks.forEach((sink) => {
+        try {
+          sink(entry);
+        } catch {
+          /* never let a sink break logging */
+        }
+      });
+    }
   }
 }

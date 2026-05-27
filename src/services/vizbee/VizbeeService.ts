@@ -2,6 +2,7 @@ import { Logger } from '@/services/logger/Logger';
 import { findVideo, registerVideo } from '@/data/videos';
 import { services } from '@/services/ServiceContainer';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
+import type { FeatureFlags } from '@/services/feature-flags/flags';
 
 // vizbee.js is loaded as an external <script> in index.html and exposes
 // the global window.vizbee. No npm package; types come from the SDK guide.
@@ -53,17 +54,34 @@ export class VizbeeService implements IVizbeeService {
 
   private async startWhenReady(appId: string): Promise<void> {
     const platform = services().platform.name;
-    const sdkUrl = SDK_URL_BY_PLATFORM[platform];
-    if (!sdkUrl) {
-      this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
-      return;
-    }
+
+    // Load the SDK two ways depending on the build:
+    //  - npm build: bundle it from node_modules (build-time __SDK_NPM_PACKAGE__),
+    //    a side-effect import that populates window.vizbee.
+    //  - script build: inject the right SDK <script> URL for the platform.
     try {
-      await loadScript(sdkUrl);
+      if (__SDK_NPM_PACKAGE__) {
+        const loaded = await loadBundledSdk();
+        if (!loaded) {
+          this.log.warn('no bundled SDK for this build target; continuity disabled', {
+            pkg: __SDK_NPM_PACKAGE__,
+          });
+          return;
+        }
+        this.log.info('using bundled Vizbee SDK', { pkg: __SDK_NPM_PACKAGE__ });
+      } else {
+        const sdkUrl = this.resolveSdkUrl(platform);
+        if (!sdkUrl) {
+          this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
+          return;
+        }
+        await loadScript(sdkUrl);
+      }
     } catch (e) {
-      this.log.error('failed to load Vizbee SDK script', e);
+      this.log.error('failed to load Vizbee SDK', e);
       return;
     }
+
     const ok = await waitForSdk();
     if (!ok) {
       this.log.warn('SDK not available on window.vizbee; continuity disabled');
@@ -73,10 +91,21 @@ export class VizbeeService implements IVizbeeService {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.start(appId);
       ctx.getAppAdapter().setDeeplinkHandler((info: any) => this.onDeeplink(info));
-      this.log.info('continuity started', { appId, sdkUrl });
+      this.log.info('continuity started', { appId });
     } catch (e) {
       this.log.error('continuity start failed', e);
     }
+  }
+
+  // Tizen and webOS ship 4 SDK builds selectable in Settings (full/light ×
+  // ES5/ES6); the `vizbeeSdk` flag picks one. Other platforms ship a single
+  // build, so the flag doesn't apply and they fall back to their per-platform URL.
+  private resolveSdkUrl(platform: PlatformName): string | undefined {
+    const variants = SDK_URL_BY_VARIANT[platform];
+    if (variants) {
+      return variants[services().flags.get('vizbeeSdk')];
+    }
+    return SDK_URL_BY_PLATFORM[platform];
   }
 
   private onDeeplink(videoInfo: any): void {
@@ -134,6 +163,7 @@ export class VizbeeService implements IVizbeeService {
 
   setVideo(meta: VizbeeVideoMeta, binding: VizbeePlayerBinding): void {
     if (!window.vizbee?.continuity) return;
+    this.log.debug('setVideo', { id: meta.id, title: meta.title, isLive: !!meta.isLive });
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       const adapter = new window.vizbee.continuity.adapters.PlayerAdapter();
@@ -162,6 +192,7 @@ export class VizbeeService implements IVizbeeService {
 
   setVideoStop(): void {
     if (!window.vizbee?.continuity) return;
+    this.log.debug('setVideoStop');
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.stopVideo();
@@ -182,13 +213,47 @@ export class VizbeeService implements IVizbeeService {
 
 // Each TV platform ships its own SDK build; loading the wrong one yields a
 // broken handshake. `desktop` is intentionally absent — App.ts gates init off.
+// `tizen` and `webos` are resolved via SDK_URL_BY_VARIANT (Settings flag).
 const SDK_URL_BY_PLATFORM: Partial<Record<PlatformName, string>> = {
-  tizen: 'https://sdk.claspws.tv/samsungtv_tizen/v7/vizbee.js',
-  // tizen: 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js',
   viziosmartcast: 'https://sdk.claspws.tv/vizio_smartcast/v7/vizbee.js',
-  webos: 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
   xbox: 'https://sdk.claspws.tv/xbox_one/v7/vizbee.js',
 };
+
+// Platforms that expose the 4 selectable builds (full/light × ES5/ES6) via the
+// `vizbeeSdk` Settings flag. Each full build serves both ES5 and ES6 from one
+// URL; the light builds are split by target. Platforms absent here ship a
+// single build and fall back to SDK_URL_BY_PLATFORM.
+const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizbeeSdk'], string>>> = {
+  tizen: {
+    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js',
+    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native_es6.js',
+  },
+  webos: {
+    'full-es5': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native.js',
+    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native_es6.js',
+  },
+};
+
+// Import the bundled SDK for npm builds. __SDK_NPM_PACKAGE__ is a build-time
+// constant (Vite define); the literal import is required so the bundler
+// includes the package, and the branch tree-shakes away in builds where the
+// constant is empty (script builds). Each package is a side-effect module that
+// populates window.vizbee. Add a branch per package as more ship.
+async function loadBundledSdk(): Promise<boolean> {
+  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-tizen-es5') {
+    await import('vizbee-qa-sdk-tizen-es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-lgwebos-es6') {
+    await import('vizbee-qa-sdk-lgwebos-es6');
+    return true;
+  }
+  return false;
+}
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
