@@ -19,6 +19,11 @@ export interface FeatureFlags {
   // by HomeSSOService. Rendered in the "HomeSSO modal preview" section, not the
   // generic flags loop.
   homeSSOStyle: 'default' | 'dazn';
+  // HomeSSO modal localization: 'default' = LTR (the SDK default); 'rtl' mirrors
+  // the layout for right-to-left locales (icon trailing, text right-aligned).
+  // Applied at show time by HomeSSOService via the modal config's `direction`.
+  // Rendered in the "HomeSSO modal preview" section, not the generic flags loop.
+  homeSSOLocale: 'default' | 'rtl';
 }
 
 // Key order here is the order rows appear in Settings. (npmModule renders
@@ -30,6 +35,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   videoPlayer: 'html',
   npmModule: 'es5',
   homeSSOStyle: 'dazn',
+  homeSSOLocale: 'default',
 };
 
 export type FlagKey = keyof FeatureFlags;
@@ -45,6 +51,7 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
   appBuild: 'App Build',
   npmModule: 'NPM SDK Module',
   homeSSOStyle: 'HomeSSO Modal Style',
+  homeSSOLocale: 'Localization',
 };
 
 // Labels for the options of each enum-typed flag. Boolean flags don't appear
@@ -74,5 +81,9 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
   homeSSOStyle: [
     { value: 'default', label: 'Default style' },
     { value: 'dazn', label: 'DAZN style' },
+  ],
+  homeSSOLocale: [
+    { value: 'default', label: 'Use Default' },
+    { value: 'rtl', label: 'Use RTL (Arabic)' },
   ],
 };

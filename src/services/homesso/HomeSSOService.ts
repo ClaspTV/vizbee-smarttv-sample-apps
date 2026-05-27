@@ -61,6 +61,44 @@ const DEFAULT_STYLE = {
   borderRadius: null,
 };
 
+// Per-modal preview strings (the `homeSSOLocale` flag). The SDK's localization
+// feature handles layout direction only (LTR vs RTL); the *text* is the
+// integrator's responsibility. So the RTL option swaps in Arabic to demonstrate
+// genuine right-to-left rendering — right-aligned, words flowing R→L — rather
+// than English text that merely right-aligns. The `ltr` strings mirror the
+// SDK's English defaults so switching back restores the out-of-box copy
+// (deepMerge needs the explicit string; it skips `undefined`). Progress has no
+// title in either language. Applied via the per-modal config setters since the
+// three modals carry different text.
+type ModalText = { titleText?: string; descriptionText: string };
+const PREVIEW_TEXT: Record<
+  'ltr' | 'rtl',
+  { informational: ModalText; progress: ModalText; success: ModalText }
+> = {
+  ltr: {
+    informational: {
+      titleText: 'Mobile Sign In',
+      descriptionText: 'Please use your mobile app to complete the sign in process.',
+    },
+    progress: { descriptionText: 'Signing in using your mobile app ...' },
+    success: {
+      titleText: 'Mobile Sign In Successful!',
+      descriptionText: 'Cast or select any content to start watching.',
+    },
+  },
+  rtl: {
+    informational: {
+      titleText: 'تسجيل الدخول عبر الهاتف',
+      descriptionText: 'يرجى استخدام تطبيق هاتفك لإكمال عملية تسجيل الدخول.',
+    },
+    progress: { descriptionText: 'جارٍ تسجيل الدخول عبر تطبيق هاتفك ...' },
+    success: {
+      titleText: 'تم تسجيل الدخول بنجاح!',
+      descriptionText: 'يمكنك اختيار أي محتوى لبدء المشاهدة.',
+    },
+  },
+};
+
 // Bridges the sample app to the HomeSSO SDK's sign-in toasts. This is a
 // *preview-only* integration: it loads the SDK and triggers its modals with
 // fake data so the modal UI can be enhanced without the full sign-in flow (no
@@ -124,18 +162,35 @@ export class HomeSSOService {
     return this.deploymentDatePromise;
   }
 
-  // Apply the Settings-selected toast style (DAZN vs SDK default) via the UI
-  // manager. setCommonModalConfig merges into every modal type, so one call
-  // styles the informational, progress and success toasts alike. Called before
-  // each show() so the toast always reflects the current `homeSSOStyle` flag.
-  private applyModalStyling(): void {
+  // Apply the Settings-selected toast config via the UI manager:
+  //  - style: DAZN vs the SDK's default look (`homeSSOStyle` flag);
+  //  - localization: LTR vs RTL layout (`homeSSOLocale` flag → `direction`).
+  // setCommonModalConfig merges into every modal type, so one call configures
+  // the informational, progress and success toasts alike. Called before each
+  // show() so the toast always reflects the current flags.
+  private applyModalConfig(): void {
     const ui = window.vizbee?.homesso?.HomeSSOContext?.getInstance?.()?.getHomeSSOUIManager?.();
     if (!ui?.setCommonModalConfig) {
-      this.log.warn('HomeSSO UI manager unavailable; skipping modal styling');
+      this.log.warn('HomeSSO UI manager unavailable; skipping modal config');
       return;
     }
-    const style = services().flags.get('homeSSOStyle') === 'dazn' ? DAZN_STYLE : DEFAULT_STYLE;
-    ui.setCommonModalConfig({ ...style });
+    const flags = services().flags;
+    const style = flags.get('homeSSOStyle') === 'dazn' ? DAZN_STYLE : DEFAULT_STYLE;
+    const rtl = flags.get('homeSSOLocale') === 'rtl';
+    ui.setCommonModalConfig({ ...style, direction: rtl ? 'rtl' : 'ltr' });
+
+    // Localized strings to match the direction: Arabic for RTL so the words
+    // actually flow right-to-left, the SDK's English defaults for LTR. The three
+    // modals carry different text, so set each via its own config setter.
+    // CAVEAT: the SDK's VizbeeHomeSSOManager.updateSuccessUI() re-hardcodes the
+    // English success title/description on every onSuccess, clobbering this
+    // success override — so the success toast stays English until that SDK
+    // method is fixed to respect setSuccessSignInModalConfig (informational and
+    // progress localize correctly). The call is kept so it works once it is.
+    const text = rtl ? PREVIEW_TEXT.rtl : PREVIEW_TEXT.ltr;
+    ui.setInformationalSignInModalConfig?.(text.informational);
+    ui.setProgressSignInModalConfig?.(text.progress);
+    ui.setSuccessSignInModalConfig?.(text.success);
   }
 
   // --- Modal preview controls ------------------------------------------------
@@ -149,7 +204,7 @@ export class HomeSSOService {
     const m = this.manager();
     const msgs = this.messages();
     if (!m || !msgs) return;
-    this.applyModalStyling();
+    this.applyModalConfig();
     m.isRemoteSignedIn = false;
     m.onProgress(new msgs.ProgressStatus(PREVIEW_SIGN_IN_TYPE, { regcode: 'DEMO-1234' }));
   }
@@ -160,7 +215,7 @@ export class HomeSSOService {
     const m = this.manager();
     const msgs = this.messages();
     if (!m || !msgs) return;
-    this.applyModalStyling();
+    this.applyModalConfig();
     m.isRemoteSignedIn = true;
     m.onProgress(new msgs.ProgressStatus(PREVIEW_SIGN_IN_TYPE, { regcode: 'DEMO-1234' }));
   }
@@ -172,7 +227,7 @@ export class HomeSSOService {
     const m = this.manager();
     const msgs = this.messages();
     if (!m || !msgs) return;
-    this.applyModalStyling();
+    this.applyModalConfig();
     m.onSuccess(new msgs.SuccessStatus(PREVIEW_SIGN_IN_TYPE, 'preview-user', { email: 'demo@vizbee.tv' }));
   }
 

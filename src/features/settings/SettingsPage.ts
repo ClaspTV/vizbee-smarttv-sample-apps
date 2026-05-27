@@ -55,8 +55,9 @@ export function renderSettingsPage(root: HTMLElement): () => void {
 
   for (const key of keys) {
     // npmModule is surfaced through the build-aware "Vizbee SDK" row below;
-    // homeSSOStyle renders in the HomeSSO preview section. Neither is a plain row.
-    if (key === 'npmModule' || key === 'homeSSOStyle') continue;
+    // homeSSOStyle / homeSSOLocale render in the HomeSSO preview section. None
+    // of these is a plain row.
+    if (key === 'npmModule' || key === 'homeSSOStyle' || key === 'homeSSOLocale') continue;
 
     // Build-aware "Vizbee SDK" row: the script build picks the SDK <script>
     // variant (vizbeeSdk); the npm build picks which bundled module to load
@@ -113,13 +114,24 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   ssoList.className = 'settings-list';
 
   // Style selector (SDK default vs DAZN) — backed by the persisted homeSSOStyle
-  // flag; HomeSSOService.applyModalStyling() reads it at show time.
+  // flag; HomeSSOService.applyModalConfig() reads it at show time.
   ssoList.appendChild(
     createRadioGroup({
       label: FLAG_LABELS.homeSSOStyle,
       options: FLAG_OPTIONS.homeSSOStyle!,
       initialValue: flags.get('homeSSOStyle'),
       onChange: (value) => flags.set('homeSSOStyle', value as never),
+    }),
+  );
+
+  // Localization (LTR default vs RTL) — backed by the persisted homeSSOLocale
+  // flag; applied at show time via the modal config's `direction`.
+  ssoList.appendChild(
+    createRadioGroup({
+      label: FLAG_LABELS.homeSSOLocale,
+      options: FLAG_OPTIONS.homeSSOLocale!,
+      initialValue: flags.get('homeSSOLocale'),
+      onChange: (value) => flags.set('homeSSOLocale', value as never),
     }),
   );
 
