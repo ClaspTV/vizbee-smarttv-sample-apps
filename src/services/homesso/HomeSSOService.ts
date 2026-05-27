@@ -71,6 +71,7 @@ export class HomeSSOService {
   private ready = false;
   private shimmed = false;
   private variant: EsVariant | null = null;
+  private version: string | null = null;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -97,13 +98,17 @@ export class HomeSSOService {
       this.log.warn('HomeSSO SDK not available on window.vizbee.homesso; modal preview disabled');
       return;
     }
-    this.log.info('HomeSSO SDK ready', { variant: this.variant });
+    // VERSION is set on the namespace by the SDK build (@rollup/plugin-replace).
+    // Older bundles predate it, so it may be undefined → reported as unknown.
+    this.version = window.vizbee?.homesso?.VERSION ?? null;
+    this.log.info('HomeSSO SDK ready', { variant: this.variant, version: this.version });
   }
 
   // Snapshot for Settings → Device: which ES variant was loaded (mirrored from
-  // the Vizbee SDK selection) and whether the SDK finished registering.
-  status(): { ready: boolean; variant: EsVariant | null } {
-    return { ready: this.ready, variant: this.variant };
+  // the Vizbee SDK selection), the SDK version (null on bundles that predate
+  // the VERSION export), and whether the SDK finished registering.
+  status(): { ready: boolean; variant: EsVariant | null; version: string | null } {
+    return { ready: this.ready, variant: this.variant, version: this.version };
   }
 
   // Apply the Settings-selected toast style (DAZN vs SDK default) via the UI

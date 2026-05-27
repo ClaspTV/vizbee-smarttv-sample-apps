@@ -161,14 +161,16 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
   // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on desktop.
   appendInfo(infoList, 'SDK Version', window.VZB?.VERSION ?? '—');
-  // HomeSSO SDK: the ES variant loaded (mirrors the Vizbee SDK selection) and
-  // whether it finished registering. '—' before it loads.
+  // HomeSSO SDK: version + ES variant (variant mirrors the Vizbee SDK
+  // selection). Reads window.vizbee.homesso.VERSION; bundles predating that
+  // export report "unknown". '—' before it loads, "loading…" while registering.
   const sso = services().homeSSO.status();
-  appendInfo(
-    infoList,
-    'HomeSSO SDK',
-    sso.variant ? `${sso.variant.toUpperCase()}${sso.ready ? '' : ' (loading…)'}` : '—',
-  );
+  let ssoValue = '—';
+  if (sso.variant) {
+    const ver = sso.ready ? (sso.version ?? 'unknown') : 'loading…';
+    ssoValue = `${ver} (${sso.variant.toUpperCase()})`;
+  }
+  appendInfo(infoList, 'HomeSSO SDK', ssoValue);
   // Which build is actually running, where it loaded from, and when it was
   // built — so "deployed one, launched another" is verifiable at a glance.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
