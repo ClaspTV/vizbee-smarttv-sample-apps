@@ -1,6 +1,7 @@
 import { ConfigService } from './config/ConfigService';
 import { FeatureFlagService } from './feature-flags/FeatureFlagService';
 import { VizbeeService } from './vizbee/VizbeeService';
+import { HomeSSOService } from './homesso/HomeSSOService';
 import { PlatformAdapter } from '@/core/platform/PlatformAdapter';
 import { RemoteKeyService } from '@/core/input/RemoteKeyService';
 import { FocusManager } from '@/core/navigation/FocusManager';
@@ -15,6 +16,7 @@ export interface Services {
   config: ConfigService;
   flags: FeatureFlagService;
   vizbee: VizbeeService;
+  homeSSO: HomeSSOService;
   platform: PlatformAdapter;
   remoteKeys: RemoteKeyService;
   focus: FocusManager;

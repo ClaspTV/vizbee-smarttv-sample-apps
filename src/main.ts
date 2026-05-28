@@ -21,6 +21,7 @@ import { LifecycleManager } from './core/lifecycle/LifecycleManager';
 import { ConfigService } from './services/config/ConfigService';
 import { FeatureFlagService } from './services/feature-flags/FeatureFlagService';
 import { VizbeeService } from './services/vizbee/VizbeeService';
+import { HomeSSOService } from './services/homesso/HomeSSOService';
 import { setServices } from './services/ServiceContainer';
 import { Router } from './app/Router';
 import { startApp } from './app/App';
@@ -66,6 +67,7 @@ async function boot(): Promise<void> {
   const focus = new FocusManager(remoteKeys);
   const lifecycle = new LifecycleManager();
   const vizbee = new VizbeeService();
+  const homeSSO = new HomeSSOService();
   const router = new Router();
 
   setServices({
@@ -76,6 +78,7 @@ async function boot(): Promise<void> {
     focus,
     lifecycle,
     vizbee,
+    homeSSO,
     router,
   });
 

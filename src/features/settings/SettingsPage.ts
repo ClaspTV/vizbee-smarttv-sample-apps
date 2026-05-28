@@ -54,9 +54,10 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   firstFocus = appIdField;
 
   for (const key of keys) {
-    // npmModule is surfaced through the build-aware "Vizbee SDK" row below,
-    // not as its own row.
-    if (key === 'npmModule') continue;
+    // npmModule is surfaced through the build-aware "Vizbee SDK" row below;
+    // homeSSOStyle / homeSSOLocale render in the HomeSSO preview section. None
+    // of these is a plain row.
+    if (key === 'npmModule' || key === 'homeSSOStyle' || key === 'homeSSOLocale') continue;
 
     // Build-aware "Vizbee SDK" row: the script build picks the SDK <script>
     // variant (vizbeeSdk); the npm build picks which bundled module to load
@@ -97,6 +98,62 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   section.appendChild(sectionTitle);
   section.appendChild(list);
 
+  // Section: HomeSSO modal preview. These toggles drive the HomeSSO SDK's own
+  // sign-in toasts (rendered bottom-right by the SDK) with dummy data, so the
+  // modal UI can be previewed/enhanced without a real paired phone. They are
+  // momentary preview controls — not persisted feature flags. The SDK shows one
+  // toast at a time, so turning one on replaces whatever was showing.
+  const ssoSection = document.createElement('section');
+  ssoSection.className = 'settings-section';
+
+  const ssoTitle = document.createElement('h2');
+  ssoTitle.className = 'settings-section__title';
+  ssoTitle.textContent = 'HomeSSO modal preview';
+
+  const ssoList = document.createElement('div');
+  ssoList.className = 'settings-list';
+
+  // Style selector (SDK default vs DAZN) — backed by the persisted homeSSOStyle
+  // flag; HomeSSOService.applyModalConfig() reads it at show time.
+  ssoList.appendChild(
+    createRadioGroup({
+      label: FLAG_LABELS.homeSSOStyle,
+      options: FLAG_OPTIONS.homeSSOStyle!,
+      initialValue: flags.get('homeSSOStyle'),
+      onChange: (value) => flags.set('homeSSOStyle', value as never),
+    }),
+  );
+
+  // Localization (LTR default vs RTL) — backed by the persisted homeSSOLocale
+  // flag; applied at show time via the modal config's `direction`.
+  ssoList.appendChild(
+    createRadioGroup({
+      label: FLAG_LABELS.homeSSOLocale,
+      options: FLAG_OPTIONS.homeSSOLocale!,
+      initialValue: flags.get('homeSSOLocale'),
+      onChange: (value) => flags.set('homeSSOLocale', value as never),
+    }),
+  );
+
+  const homeSSO = services().homeSSO;
+  const ssoModals: ReadonlyArray<{ label: string; show: () => void }> = [
+    { label: 'Informational modal', show: () => homeSSO.showInformational() },
+    { label: 'Progress modal', show: () => homeSSO.showProgress() },
+    { label: 'Success modal', show: () => homeSSO.showSuccess() },
+  ];
+  for (const modal of ssoModals) {
+    ssoList.appendChild(
+      createToggle({
+        label: modal.label,
+        initialValue: false,
+        onChange: (on) => (on ? modal.show() : homeSSO.hide()),
+      }),
+    );
+  }
+
+  ssoSection.appendChild(ssoTitle);
+  ssoSection.appendChild(ssoList);
+
   // Section: Device info (right-hand column — see .settings-body)
   const infoSection = document.createElement('section');
   infoSection.className = 'settings-section settings-section--device';
@@ -114,8 +171,33 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   appendInfo(infoList, 'App', services().config.get().appName);
   appendInfo(infoList, 'App Version', __APP_VERSION__);
   appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
-  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on desktop.
-  appendInfo(infoList, 'SDK Version', window.VZB?.VERSION ?? '—');
+  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on
+  // desktop. The deployment date (S3 Last-Modified) is fetched async and
+  // appended in brackets, e.g. "7.8.35 (May 27, 2026)".
+  const sdkVersion = window.VZB?.VERSION ?? null;
+  const sdkDd = appendInfo(infoList, 'SDK Version', sdkVersion ?? '—');
+  if (sdkVersion) {
+    void services().vizbee.sdkDeploymentDate().then((date) => {
+      if (date) sdkDd.textContent = `${sdkVersion} (${date})`;
+    });
+  }
+  // HomeSSO SDK: version + deployment date (in brackets) + ES variant (which
+  // mirrors the Vizbee SDK selection). Reads window.vizbee.homesso.VERSION;
+  // bundles predating that export report "unknown". '—' before it loads,
+  // "loading…" while registering. Date arrives async (see below).
+  const sso = services().homeSSO.status();
+  const buildSsoValue = (date: string | null): string => {
+    if (!sso.variant) return '—';
+    const ver = sso.ready ? (sso.version ?? 'unknown') : 'loading…';
+    const datePart = date ? ` (${date})` : '';
+    return `${ver}${datePart} · ${sso.variant.toUpperCase()}`;
+  };
+  const ssoDd = appendInfo(infoList, 'HomeSSO SDK', buildSsoValue(null));
+  if (sso.variant && sso.ready) {
+    void services().homeSSO.deploymentDate().then((date) => {
+      if (date) ssoDd.textContent = buildSsoValue(date);
+    });
+  }
   // Which build is actually running, where it loaded from, and when it was
   // built — so "deployed one, launched another" is verifiable at a glance.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
@@ -125,10 +207,16 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   infoSection.appendChild(infoTitle);
   infoSection.appendChild(infoList);
 
-  // Two-column body: feature flags on the left, device info on the right.
+  // Two-column body: left column stacks feature flags + HomeSSO preview;
+  // device info sits on the right.
+  const main = document.createElement('div');
+  main.className = 'settings-main';
+  main.appendChild(section);
+  main.appendChild(ssoSection);
+
   const body = document.createElement('div');
   body.className = 'settings-body';
-  body.appendChild(section);
+  body.appendChild(main);
   body.appendChild(infoSection);
 
   page.appendChild(header);
@@ -212,11 +300,14 @@ function promptModuleSwitch(value: string): void {
   });
 }
 
-function appendInfo(parent: HTMLElement, label: string, value: string): void {
+// Returns the value cell so callers can patch it later (e.g. appending an
+// SDK deployment date once its async fetch resolves).
+function appendInfo(parent: HTMLElement, label: string, value: string): HTMLElement {
   const dt = document.createElement('dt');
   dt.textContent = label;
   const dd = document.createElement('dd');
   dd.textContent = value;
   parent.appendChild(dt);
   parent.appendChild(dd);
+  return dd;
 }

@@ -14,6 +14,16 @@ export interface FeatureFlags {
   // …/webos-with-nodemodule/es5 vs /es6 hosted folders. Surfaced in the
   // build-aware "Vizbee SDK" row (the script build uses `vizbeeSdk` instead).
   npmModule: 'es5' | 'es6';
+  // HomeSSO sign-in toast styling: 'default' = the SDK's out-of-box look;
+  // 'dazn' = spacing/border matched to the DAZN mockups. Applied at show time
+  // by HomeSSOService. Rendered in the "HomeSSO modal preview" section, not the
+  // generic flags loop.
+  homeSSOStyle: 'default' | 'dazn';
+  // HomeSSO modal localization: 'default' = LTR (the SDK default); 'rtl' mirrors
+  // the layout for right-to-left locales (icon trailing, text right-aligned).
+  // Applied at show time by HomeSSOService via the modal config's `direction`.
+  // Rendered in the "HomeSSO modal preview" section, not the generic flags loop.
+  homeSSOLocale: 'default' | 'rtl';
 }
 
 // Key order here is the order rows appear in Settings. (npmModule renders
@@ -24,6 +34,8 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   syncConnection: 'pubnub',
   videoPlayer: 'html',
   npmModule: 'es5',
+  homeSSOStyle: 'dazn',
+  homeSSOLocale: 'default',
 };
 
 export type FlagKey = keyof FeatureFlags;
@@ -38,6 +50,8 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
   videoPlayer: 'Video Player',
   appBuild: 'App Build',
   npmModule: 'NPM SDK Module',
+  homeSSOStyle: 'HomeSSO Modal Style',
+  homeSSOLocale: 'Localization',
 };
 
 // Labels for the options of each enum-typed flag. Boolean flags don't appear
@@ -63,5 +77,13 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
   npmModule: [
     { value: 'es5', label: 'Use ES5 Module' },
     { value: 'es6', label: 'Use ES6 Module' },
+  ],
+  homeSSOStyle: [
+    { value: 'default', label: 'Default style' },
+    { value: 'dazn', label: 'DAZN style' },
+  ],
+  homeSSOLocale: [
+    { value: 'default', label: 'Use Default' },
+    { value: 'rtl', label: 'Use RTL (Arabic)' },
   ],
 };
