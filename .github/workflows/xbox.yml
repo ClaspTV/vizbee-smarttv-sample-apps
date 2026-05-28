@@ -59,8 +59,8 @@ jobs:
               ForEach-Object { "$($_.displayName) → $($_.installationPath)" }
             Write-Host ""
             Write-Host "=== Installed workloads (looking for Universal) ==="
-            & $vswhere -all -prerelease -products * -requires Microsoft.VisualStudio.Workload.Universal -property installationPath
-            Write-Host "(empty above ⇒ UWP workload NOT installed on this runner image)"
+            $uwp = & $vswhere -all -prerelease -products * -requires Microsoft.VisualStudio.Workload.Universal -property installationPath
+            if ([string]::IsNullOrWhiteSpace($uwp)) { Write-Host "(empty ⇒ UWP workload NOT installed)" } else { Write-Host "$uwp  ✓ UWP workload installed" }
           } else {
             Write-Host "vswhere.exe not found"
           }
