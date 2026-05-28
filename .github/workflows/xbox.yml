@@ -44,6 +44,68 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
+      # The previous run failed with CS0234 on Windows.ApplicationModel etc.,
+      # which means the UWP API contracts (WinMDs) weren't auto-referenced —
+      # either the UWP workload isn't installed on the runner, or the
+      # Microsoft.Windows.UI.Xaml.CSharp.targets file isn't on the expected
+      # path. This step dumps what's there so we can confirm.
+      - name: Diagnose UWP toolchain on the runner
+        working-directory: .
+        run: |
+          Write-Host "=== VS installations (vswhere) ==="
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -all -prerelease -products * -format json | ConvertFrom-Json |
+              ForEach-Object { "$($_.displayName) → $($_.installationPath)" }
+            Write-Host ""
+            Write-Host "=== Installed workloads (looking for Universal) ==="
+            & $vswhere -all -prerelease -products * -requires Microsoft.VisualStudio.Workload.Universal -property installationPath
+            Write-Host "(empty above ⇒ UWP workload NOT installed on this runner image)"
+          } else {
+            Write-Host "vswhere.exe not found"
+          }
+
+          Write-Host ""
+          Write-Host "=== Windows 10/11 SDK references on disk ==="
+          $kits = "${env:ProgramFiles(x86)}\Windows Kits\10\References"
+          if (Test-Path $kits) { Get-ChildItem $kits -Directory | Select-Object -ExpandProperty Name } else { Write-Host "no Windows Kits References folder" }
+
+          Write-Host ""
+          Write-Host "=== Looking for Microsoft.Windows.UI.Xaml.CSharp.targets (the targets file my .csproj imports) ==="
+          Get-ChildItem -Recurse -ErrorAction SilentlyContinue `
+            -Path "C:\Program Files","C:\Program Files (x86)" `
+            -Filter "Microsoft.Windows.UI.Xaml.CSharp.targets" |
+            Select-Object -ExpandProperty FullName
+
+          Write-Host ""
+          Write-Host "=== MSBuild version ==="
+          msbuild -version -nologo
+
+      # Some windows-latest images ship VS 2022 Build Tools WITHOUT the
+      # Universal Windows Platform workload — that's what makes UWP CS0234
+      # errors. Install it via the silent VS Installer modifier if missing.
+      - name: Install UWP workload (if missing)
+        working-directory: .
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installed = & $vswhere -all -prerelease -products * -requires Microsoft.VisualStudio.Workload.Universal -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installed)) {
+            Write-Host "UWP workload missing — installing via VS Installer (this takes a few minutes)…"
+            $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+            $anyVs = & $vswhere -all -prerelease -products * -property installationPath | Select-Object -First 1
+            if (-not $anyVs) { Write-Error "No VS installation found to add workload to"; exit 1 }
+            & $vsInstaller modify `
+              --installPath "$anyVs" `
+              --add Microsoft.VisualStudio.Workload.Universal `
+              --add Microsoft.VisualStudio.Component.UWP.Support `
+              --includeRecommended --quiet --norestart --nocache | Out-Null
+            $exit = $LASTEXITCODE
+            if ($exit -ne 0) { Write-Error "VS Installer modify failed with exit $exit"; exit $exit }
+            Write-Host "UWP workload installed."
+          } else {
+            Write-Host "UWP workload already installed at: $installed"
+          }
+
       - name: Restore NuGet packages
         run: nuget restore VizbeeSampleXbox.sln
 
