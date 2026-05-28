@@ -1,0 +1,102 @@
+# Builds the Xbox UWP shell on a Windows runner and uploads a signed
+# `.msixbundle` (+ matching `.cer`) as a workflow artifact. Run from the
+# Actions tab via "Run workflow", or it triggers on pushes that touch the
+# shell project.
+#
+# Self-sufficient: no secrets needed for the first build. A self-signed dev
+# certificate is generated in-workflow with `Subject=CN=Vizbee` so it matches
+# `Identity Publisher="CN=Vizbee"` in Package.appxmanifest. Replace the
+# in-workflow cert with a stored secret (PFX_BASE64 + PFX_PASSWORD) once you
+# want a stable signing identity across runs.
+#
+# Sideload from your Mac:
+#   1. Download the `VizbeeSampleXbox-msix` artifact, unzip it.
+#   2. Xbox Device Portal (https://<xbox-ip>) → System → Add Certificate →
+#      upload `VizbeeSampleXbox_TemporaryKey.cer` to "Trusted People".
+#   3. Device Portal → Home → My games & apps → Add → pick the .msixbundle.
+#   4. Launch from Xbox dashboard.
+name: Build Xbox MSIX
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'platforms/xbox/shell/**'
+      - '.github/workflows/xbox.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: platforms/xbox/shell
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # windows-latest has VS 2022 Build Tools preinstalled; this just pins
+      # `msbuild` onto PATH so subsequent steps can call it directly.
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore VizbeeSampleXbox.sln
+
+      # Self-signed dev cert. CN MUST match Package.appxmanifest's Publisher
+      # (CN=Vizbee), otherwise MSIX signing fails with `error APPX0102`. The
+      # two extensions are the minimum UWP needs:
+      #   2.5.29.37 (Enhanced Key Usage) → 1.3.6.1.5.5.7.3.3 = Code Signing
+      #   2.5.29.19 (Basic Constraints)  → CA:FALSE
+      - name: Generate dev signing certificate
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject "CN=Vizbee" `
+            -KeyUsage DigitalSignature `
+            -FriendlyName "Vizbee Sample Dev Cert" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          $pwd = ConvertTo-SecureString -String "vizbee" -Force -AsPlainText
+          Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
+            -FilePath VizbeeSampleXbox_TemporaryKey.pfx -Password $pwd | Out-Null
+          Export-Certificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
+            -FilePath VizbeeSampleXbox_TemporaryKey.cer | Out-Null
+          "CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Generated cert with thumbprint $($cert.Thumbprint)"
+
+      # UapAppxPackageBuildMode=SideloadOnly flips the output extension from
+      # the legacy `.appxbundle` to `.msixbundle` and skips the Store-upload
+      # symbol packaging. AppxBundlePlatforms=x64 because Xbox is x64-only.
+      - name: Build MSIX (Release | x64 | Sideload)
+        run: |
+          msbuild VizbeeSampleXbox.csproj `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:AppxBundlePlatforms=x64 `
+            /p:AppxBundle=Always `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile=VizbeeSampleXbox_TemporaryKey.pfx `
+            /p:PackageCertificatePassword=vizbee `
+            /p:PackageCertificateThumbprint=$env:CERT_THUMBPRINT `
+            /p:GenerateAppxPackageOnBuild=true `
+            /restore `
+            /verbosity:minimal
+
+      # The exact AppPackages path embeds the version from Package.appxmanifest
+      # (e.g. .../VizbeeSampleXbox_0.1.0.0_Test/) so use a glob. The `.cer` is
+      # the public cert you install on the Xbox once via Device Portal.
+      - name: Upload sideload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VizbeeSampleXbox-msix
+          path: |
+            platforms/xbox/shell/AppPackages/**/*.msixbundle
+            platforms/xbox/shell/VizbeeSampleXbox_TemporaryKey.cer
+          if-no-files-found: error
+          retention-days: 14

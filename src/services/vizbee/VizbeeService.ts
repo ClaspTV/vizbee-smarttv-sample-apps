@@ -237,6 +237,15 @@ export class VizbeeService implements IVizbeeService {
 // Each TV platform ships its own SDK build; loading the wrong one yields a
 // broken handshake. `desktop` is intentionally absent — App.ts gates init off.
 // `tizen` and `webos` are resolved via SDK_URL_BY_VARIANT (Settings flag).
+//
+// XBOX NOTE: the URL below points at the legacy Xbox SDK that reaches into the
+// EdgeHTML WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
+// Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
+// platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
+// NOT exist — calls into this build will throw and break pairing / device info
+// reporting. Swap this to the WebView2-compatible Xbox SDK build once it's
+// published by the Vizbee SDK team (or wire a host-object bridge in
+// MainPage.xaml.cs to proxy the WinRT calls).
 const SDK_URL_BY_PLATFORM: Partial<Record<PlatformName, string>> = {
   viziosmartcast: 'https://sdk.claspws.tv/vizio_smartcast/v7/vizbee.js',
   xbox: 'https://sdk.claspws.tv/xbox_one/v7/vizbee.js',

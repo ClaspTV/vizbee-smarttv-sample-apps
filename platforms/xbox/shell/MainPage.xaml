@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="VizbeeSampleXbox.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    Background="#0b0d10">
+    <!--
+      Chromium-based WebView2 from WinUI 2.x (Microsoft.UI.Xaml.Controls).
+      The Source URL is the same CloudFront-hosted web build that tizen/webos
+      load — single web app, three native shells. Loaded() in code-behind
+      ensures the CoreWebView2 environment is ready before any host-object
+      bridge is attached.
+    -->
+    <Grid>
+        <muxc:WebView2
+            x:Name="WebView"
+            Source="https://d1a16fhfuhnwgt.cloudfront.net/xbox/index.html"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch" />
+    </Grid>
+</Page>
