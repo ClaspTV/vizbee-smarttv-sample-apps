@@ -48,6 +48,9 @@ namespace VizbeeSampleXbox
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[VZB] OnLaunched kind={e.Kind} args=[{e.Arguments}] prelaunch={e.PrelaunchActivated}");
+
             // Opt out of the Xbox 10% TV-safe-area inset BEFORE activation so the
             // WebView2 fills the full 1920×1080 surface. Calling this later (e.g.
             // in MainPage_Loaded) is too late — the OS has already letterboxed.
@@ -76,6 +79,9 @@ namespace VizbeeSampleXbox
         /// </summary>
         protected override void OnActivated(IActivatedEventArgs args)
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[VZB] OnActivated kind={args.Kind} type={args.GetType().Name}");
+
             // Same safe-area opt-out as OnLaunched — DIAL activations can arrive
             // before any cold-launch, so this path needs the same setup.
             ApplicationView.GetForCurrentView().SetDesiredBoundsMode(
@@ -87,10 +93,20 @@ namespace VizbeeSampleXbox
             // parameters from the mobile sender. Same hook Fox+ uses.
             if (args.Kind == ActivationKind.Protocol)
             {
-                var protocolArgs = args as ProtocolActivatedEventArgs;
-                if (protocolArgs?.Uri != null)
+                try
                 {
-                    Vizbee.Xbox.WebView2Bridge.UpdateLaunchParams(protocolArgs.Uri.ToString());
+                    var protocolArgs = args as ProtocolActivatedEventArgs;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[VZB] OnActivated protocol uri=[{protocolArgs?.Uri}]");
+                    if (protocolArgs?.Uri != null)
+                    {
+                        Vizbee.Xbox.WebView2Bridge.UpdateLaunchParams(protocolArgs.Uri.ToString());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[VZB] UpdateLaunchParams threw: {ex}");
                 }
             }
 
