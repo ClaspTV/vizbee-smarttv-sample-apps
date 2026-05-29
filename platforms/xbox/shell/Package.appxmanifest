@@ -42,7 +42,7 @@
 
   <Applications>
     <Application
-        Id="App"
+        Id="VizbeeSampleApp.Xbox"
         Executable="$targetnametoken$.exe"
         EntryPoint="VizbeeSampleXbox.App">
       <uap:VisualElements

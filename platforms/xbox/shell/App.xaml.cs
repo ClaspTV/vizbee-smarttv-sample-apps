@@ -1,5 +1,6 @@
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
@@ -14,11 +15,22 @@ namespace VizbeeSampleXbox
         public App()
         {
             this.InitializeComponent();
+            // Xbox: by default UWP apps get a virtual gamepad cursor (right-stick
+            // moves a mouse pointer overlay) so generic web apps can be clicked.
+            // The sample app handles D-pad/A/B directly via keydown — opt out so
+            // the cursor stays hidden and D-pad → Arrow keys, A → Enter, B → Esc.
+            this.RequiresPointerMode = ApplicationRequiresPointerMode.WhenRequested;
             this.Suspending += OnSuspending;
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
+            // Opt out of the Xbox 10% TV-safe-area inset BEFORE activation so the
+            // WebView2 fills the full 1920×1080 surface. Calling this later (e.g.
+            // in MainPage_Loaded) is too late — the OS has already letterboxed.
+            ApplicationView.GetForCurrentView().SetDesiredBoundsMode(
+                ApplicationViewBoundsMode.UseCoreWindow);
+
             Frame rootFrame = Window.Current.Content as Frame;
             if (rootFrame == null)
             {
@@ -41,6 +53,11 @@ namespace VizbeeSampleXbox
         /// </summary>
         protected override void OnActivated(IActivatedEventArgs args)
         {
+            // Same safe-area opt-out as OnLaunched — DIAL activations can arrive
+            // before any cold-launch, so this path needs the same setup.
+            ApplicationView.GetForCurrentView().SetDesiredBoundsMode(
+                ApplicationViewBoundsMode.UseCoreWindow);
+
             Frame rootFrame = Window.Current.Content as Frame;
             if (rootFrame == null)
             {

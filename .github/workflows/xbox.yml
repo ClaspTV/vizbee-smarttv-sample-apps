@@ -1,31 +1,69 @@
 # Builds the Xbox UWP shell on a Windows runner and uploads a signed
-# `.msixbundle` (+ matching `.cer`) as a workflow artifact. Run from the
-# Actions tab via "Run workflow", or it triggers on pushes that touch the
-# shell project.
+# `.msixbundle` (+ matching `.cer`) as a workflow artifact.
 #
-# Self-sufficient: no secrets needed for the first build. A self-signed dev
-# certificate is generated in-workflow with `Subject=CN=Vizbee` so it matches
-# `Identity Publisher="CN=Vizbee"` in Package.appxmanifest. Replace the
-# in-workflow cert with a stored secret (PFX_BASE64 + PFX_PASSWORD) once you
-# want a stable signing identity across runs.
+# Trigger model — opt-in per PR via a checkbox in the PR body:
+#
+#   - [ ] Generate Xbox Build
+#
+# Lifecycle:
+#   * Box checked (opened/edited event)        → build runs.
+#   * New commit pushed to the PR (synchronize) → box is auto-unchecked. No
+#     build runs for that push; the user must re-check the box to confirm the
+#     build for the new code. This prevents a stale "approved-to-build" state
+#     from silently applying to whatever lands next.
+#   * Manual trigger from Actions tab (workflow_dispatch) → build runs.
 #
 # Sideload from your Mac:
 #   1. Download the `VizbeeSampleXbox-msix` artifact, unzip it.
-#   2. Xbox Device Portal (https://<xbox-ip>) → System → Add Certificate →
-#      upload `VizbeeSampleXbox_TemporaryKey.cer` to "Trusted People".
-#   3. Device Portal → Home → My games & apps → Add → pick the .msixbundle.
-#   4. Launch from Xbox dashboard.
-name: Build Xbox MSIX
+#   2. Xbox Device Portal (https://<xbox-ip>) → Home → Add → upload the
+#      .msixbundle AND the .cer in the same dialog.
+#   3. Launch from Xbox dashboard.
+name: Generate Xbox Build
 
 on:
+  pull_request:
+    types: [opened, edited, synchronize]
   workflow_dispatch:
-  push:
-    paths:
-      - 'platforms/xbox/shell/**'
-      - '.github/workflows/xbox.yml'
+
+permissions:
+  contents: read
+  pull-requests: write   # the uncheck-on-new-commit job edits the PR body
 
 jobs:
+  # When a new commit lands on the PR, sweep the box back to [ ] so the prior
+  # approval doesn't carry over. GITHUB_TOKEN-initiated edits don't recurse
+  # into this workflow (GitHub's loop guard), so this is safe.
+  uncheck-on-new-commit:
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Uncheck "Generate Xbox Build" if currently checked
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          body=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)
+          if printf "%s" "$body" | grep -qiE '^- \[[xX]\] Generate Xbox Build'; then
+            new_body=$(printf "%s" "$body" | sed -E 's/^- \[[xX]\] Generate Xbox Build/- [ ] Generate Xbox Build/')
+            tmp=$(mktemp)
+            printf "%s" "$new_body" > "$tmp"
+            gh pr edit "$PR" --repo "$REPO" --body-file "$tmp"
+            echo "Unchecked the Xbox build box on PR #$PR after new commit — re-check to build the updated code."
+          else
+            echo "Box was already unchecked — nothing to do."
+          fi
+
+  # Builds only when (a) the PR body has the box checked, OR (b) manual run.
+  # contains() is case-sensitive but GitHub's web UI always writes lowercase
+  # [x], so this catches the realistic case.
   build:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request'
+       && (github.event.action == 'opened' || github.event.action == 'edited')
+       && contains(github.event.pull_request.body, '- [x] Generate Xbox Build'))
     runs-on: windows-latest
     defaults:
       run:
@@ -44,11 +82,9 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      # The previous run failed with CS0234 on Windows.ApplicationModel etc.,
-      # which means the UWP API contracts (WinMDs) weren't auto-referenced —
-      # either the UWP workload isn't installed on the runner, or the
-      # Microsoft.Windows.UI.Xaml.CSharp.targets file isn't on the expected
-      # path. This step dumps what's there so we can confirm.
+      # Snapshot what's actually on the runner. Saved us last time when the
+      # only Windows SDK present was 10.0.26100 — TargetPlatformVersion has
+      # to match something installed here.
       - name: Diagnose UWP toolchain on the runner
         working-directory: .
         run: |
@@ -71,19 +107,9 @@ jobs:
           if (Test-Path $kits) { Get-ChildItem $kits -Directory | Select-Object -ExpandProperty Name } else { Write-Host "no Windows Kits References folder" }
 
           Write-Host ""
-          Write-Host "=== Looking for Microsoft.Windows.UI.Xaml.CSharp.targets (the targets file my .csproj imports) ==="
-          Get-ChildItem -Recurse -ErrorAction SilentlyContinue `
-            -Path "C:\Program Files","C:\Program Files (x86)" `
-            -Filter "Microsoft.Windows.UI.Xaml.CSharp.targets" |
-            Select-Object -ExpandProperty FullName
-
-          Write-Host ""
           Write-Host "=== MSBuild version ==="
           msbuild -version -nologo
 
-      # Some windows-latest images ship VS 2022 Build Tools WITHOUT the
-      # Universal Windows Platform workload — that's what makes UWP CS0234
-      # errors. Install it via the silent VS Installer modifier if missing.
       - name: Install UWP workload (if missing)
         working-directory: .
         run: |
@@ -110,10 +136,7 @@ jobs:
         run: nuget restore VizbeeSampleXbox.sln
 
       # Self-signed dev cert. CN MUST match Package.appxmanifest's Publisher
-      # (CN=Vizbee), otherwise MSIX signing fails with `error APPX0102`. The
-      # two extensions are the minimum UWP needs:
-      #   2.5.29.37 (Enhanced Key Usage) → 1.3.6.1.5.5.7.3.3 = Code Signing
-      #   2.5.29.19 (Basic Constraints)  → CA:FALSE
+      # (CN=Vizbee), otherwise MSIX signing fails with `error APPX0102`.
       - name: Generate dev signing certificate
         run: |
           $cert = New-SelfSignedCertificate `
@@ -131,9 +154,6 @@ jobs:
           "CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Generated cert with thumbprint $($cert.Thumbprint)"
 
-      # UapAppxPackageBuildMode=SideloadOnly flips the output extension from
-      # the legacy `.appxbundle` to `.msixbundle` and skips the Store-upload
-      # symbol packaging. AppxBundlePlatforms=x64 because Xbox is x64-only.
       - name: Build MSIX (Release | x64 | Sideload)
         run: |
           msbuild VizbeeSampleXbox.csproj `
@@ -150,10 +170,8 @@ jobs:
             /restore `
             /verbosity:minimal
 
-      # The exact AppPackages path embeds the version from Package.appxmanifest
-      # (e.g. .../VizbeeSampleXbox_0.1.0.0_Test/) so use a glob. The `.cer` is
-      # the public cert you install on the Xbox once via Device Portal.
       - name: Upload sideload artifact
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: VizbeeSampleXbox-msix
@@ -162,3 +180,45 @@ jobs:
             platforms/xbox/shell/VizbeeSampleXbox_TemporaryKey.cer
           if-no-files-found: error
           retention-days: 14
+
+      # Post (or update — using a hidden marker as the lookup key) a sticky
+      # comment on the PR with the artifact download link, so reviewers don't
+      # have to dig through the Actions tab. Skipped for workflow_dispatch
+      # (no PR to comment on).
+      - name: Post download link as a PR comment
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          marker="<!-- xbox-build-artifact -->"
+          short_sha=${SHA:0:7}
+          body=$(cat <<EOF
+          $marker
+          ### 🎮 Xbox build ready
+
+          **Download:** [VizbeeSampleXbox-msix.zip]($ARTIFACT_URL)
+          Contains \`VizbeeSampleXbox_*.msixbundle\` + \`VizbeeSampleXbox_TemporaryKey.cer\`. Sideload via Xbox Device Portal → Home → Add.
+
+          - **Commit:** \`$short_sha\`
+          - **Run logs:** [Actions run]($RUN_URL)
+          - **Expires:** 14 days from now
+
+          > Push a new commit to this PR to invalidate this build — the checkbox auto-unchecks and you'll need to re-check it to build the updated code.
+          EOF
+          )
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" \
+                       --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -1)
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" > /dev/null
+            echo "Updated existing build-artifact comment on PR #$PR"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -f body="$body" > /dev/null
+            echo "Posted new build-artifact comment on PR #$PR"
+          fi
