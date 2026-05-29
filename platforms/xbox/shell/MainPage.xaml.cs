@@ -53,7 +53,9 @@ namespace VizbeeSampleXbox
             //    off in release builds (anyone on the LAN can attach).
             Environment.SetEnvironmentVariable(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-                "--autoplay-policy=no-user-gesture-required --remote-debugging-port=9222");
+                "--autoplay-policy=no-user-gesture-required " +
+                "--remote-debugging-port=9222 " +
+                "--remote-debugging-address=0.0.0.0");
 
             await WebView.EnsureCoreWebView2Async();
 

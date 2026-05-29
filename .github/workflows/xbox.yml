@@ -132,6 +132,20 @@ jobs:
             Write-Host "UWP workload already installed at: $installed"
           }
 
+      # Stamp the run number into the manifest version so every build produces
+      # a unique, visible identifier (e.g. 0.1.0.42). This is the single most
+      # useful verification signal: the version in the .msixbundle filename,
+      # the sticky PR comment, and Device Portal's app list all agree, so you
+      # can confirm at a glance which build is actually installed.
+      - name: Bump manifest version with run number
+        run: |
+          $version = "0.1.0.${{ github.run_number }}"
+          $manifest = "Package.appxmanifest"
+          (Get-Content $manifest -Raw) -replace 'Version="[0-9.]+"', "Version=`"$version`"" |
+            Set-Content $manifest -NoNewline
+          Write-Host "Bumped manifest version to $version"
+          Select-String -Path $manifest -Pattern 'Version=' | Select-Object -First 1
+
       - name: Restore NuGet packages
         run: nuget restore VizbeeSampleXbox.sln
 
@@ -206,6 +220,7 @@ jobs:
           **Download:** [VizbeeSampleXbox-msix.zip]($ARTIFACT_URL)
           Contains \`VizbeeSampleXbox_*.msixbundle\` + \`VizbeeSampleXbox_TemporaryKey.cer\`. Sideload via Xbox Device Portal → Home → Add.
 
+          - **Version:** \`0.1.0.${{ github.run_number }}\` (look for this in Device Portal → My games & apps to confirm install)
           - **Commit:** \`$short_sha\`
           - **Run logs:** [Actions run]($RUN_URL)
           - **Expires:** 14 days from now

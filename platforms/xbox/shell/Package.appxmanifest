@@ -55,7 +55,10 @@
       </uap:VisualElements>
       <Extensions>
         <!-- DIAL: lets a Vizbee mobile sender launch the Xbox app remotely.
-             The Name here ("VizbeeSample") must match what the sender sends. -->
+             Name MUST equal Vizbee dashboard's `dialName` for this device
+             (case-sensitive). Distinct from the dashboard's `appStoreId` —
+             that one is the AppId/AUMID for the Microsoft Store catalog
+             launch path (see <Application Id> above). -->
         <uap:Extension Category="windows.dialProtocol">
           <uap:DialProtocol Name="com.vizbee.sampleapp.xbox" />
         </uap:Extension>
