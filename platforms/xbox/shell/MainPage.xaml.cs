@@ -1,5 +1,4 @@
 using System;
-using Microsoft.Web.WebView2.Core;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 
@@ -24,18 +23,17 @@ namespace VizbeeSampleXbox
             // <video> auto-play without a prior user gesture. Vizbee's mobile
             // cast lands the user on /player/{id} programmatically, so without
             // this flag PlayerPage's videoEl.play() is rejected by Chromium.
-            // Must go on the environment BEFORE EnsureCoreWebView2Async runs.
-            var options = new CoreWebView2EnvironmentOptions
-            {
-                AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required",
-            };
-            var env = await CoreWebView2Environment.CreateWithOptionsAsync(null, null, options);
-            await WebView.EnsureCoreWebView2Async(env);
+            //
+            // WinUI 2.x's Microsoft.UI.Xaml.Controls.WebView2 doesn't expose
+            // the EnsureCoreWebView2Async(CoreWebView2Environment) overload,
+            // so we pass browser args via the documented process env var that
+            // WebView2 reads when it spawns its browser process. MUST be set
+            // before EnsureCoreWebView2Async() is awaited.
+            Environment.SetEnvironmentVariable(
+                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                "--autoplay-policy=no-user-gesture-required");
 
-            // Pin the WebView's zoom to 1.0 — Chromium's last-used zoom can
-            // persist per-origin across runs, manifesting as "the app is
-            // zoomed in" the first time you launch after testing in dev tools.
-            WebView.ZoomFactor = 1.0;
+            await WebView.EnsureCoreWebView2Async();
 
             var core = WebView.CoreWebView2;
             if (core == null) return;
