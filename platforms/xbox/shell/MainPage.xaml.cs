@@ -1,4 +1,5 @@
 using System;
+using Windows.ApplicationModel;
 using Windows.System;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
@@ -24,6 +25,12 @@ namespace VizbeeSampleXbox
 
         private async void MainPage_Loaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
+            // Build-marker badge — generated from the package version baked
+            // into THIS .msix by msbuild. If the user can't see this text on
+            // the TV, whatever's running isn't from this build.
+            var v = Package.Current.Id.Version;
+            VersionLabel.Text = $"build v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+
             // The WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS env var was previously
             // set here, but XAML's <muxc:WebView2 Source="..."> kicks off
             // CoreWebView2 init at parse time — before MainPage_Loaded fires.
