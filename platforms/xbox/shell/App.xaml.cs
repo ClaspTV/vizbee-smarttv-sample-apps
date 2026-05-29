@@ -46,10 +46,29 @@ namespace VizbeeSampleXbox
             this.Suspending += OnSuspending;
         }
 
+        // File-based logger. Writes to LocalState/vzb-log.txt so the log survives
+        // app exit and is retrievable from a non-Windows host via Device Portal.
+        // Synchronous (no awaits) so it's safe to call from activation entrypoints.
+        private static void Log(string msg)
+        {
+            var line = $"{DateTime.UtcNow:O} {msg}";
+            System.Diagnostics.Debug.WriteLine(line);
+            try
+            {
+                var path = System.IO.Path.Combine(
+                    Windows.Storage.ApplicationData.Current.LocalFolder.Path,
+                    "vzb-log.txt");
+                System.IO.File.AppendAllText(path, line + "\n");
+            }
+            catch
+            {
+                // Logging must never break activation.
+            }
+        }
+
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[VZB] OnLaunched kind={e.Kind} args=[{e.Arguments}] prelaunch={e.PrelaunchActivated}");
+            Log($"[VZB] OnLaunched kind={e.Kind} args=[{e.Arguments}] prelaunch={e.PrelaunchActivated}");
 
             // Opt out of the Xbox 10% TV-safe-area inset BEFORE activation so the
             // WebView2 fills the full 1920×1080 surface. Calling this later (e.g.
@@ -79,8 +98,7 @@ namespace VizbeeSampleXbox
         /// </summary>
         protected override void OnActivated(IActivatedEventArgs args)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[VZB] OnActivated kind={args.Kind} type={args.GetType().Name}");
+            Log($"[VZB] OnActivated kind={args.Kind} type={args.GetType().Name}");
 
             // Same safe-area opt-out as OnLaunched — DIAL activations can arrive
             // before any cold-launch, so this path needs the same setup.
@@ -96,8 +114,7 @@ namespace VizbeeSampleXbox
                 try
                 {
                     var protocolArgs = args as ProtocolActivatedEventArgs;
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[VZB] OnActivated protocol uri=[{protocolArgs?.Uri}]");
+                    Log($"[VZB] OnActivated protocol uri=[{protocolArgs?.Uri}]");
                     if (protocolArgs?.Uri != null)
                     {
                         Vizbee.Xbox.WebView2Bridge.UpdateLaunchParams(protocolArgs.Uri.ToString());
@@ -105,8 +122,7 @@ namespace VizbeeSampleXbox
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[VZB] UpdateLaunchParams threw: {ex}");
+                    Log($"[VZB] UpdateLaunchParams threw: {ex}");
                 }
             }
 
