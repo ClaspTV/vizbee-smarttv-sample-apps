@@ -57,7 +57,7 @@
         <!-- DIAL: lets a Vizbee mobile sender launch the Xbox app remotely.
              The Name here ("VizbeeSample") must match what the sender sends. -->
         <uap:Extension Category="windows.dialProtocol">
-          <uap:DialProtocol Name="VizbeeSample" />
+          <uap:DialProtocol Name="com.vizbee.sampleapp.xbox" />
         </uap:Extension>
       </Extensions>
     </Application>
