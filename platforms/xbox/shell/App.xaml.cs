@@ -81,6 +81,19 @@ namespace VizbeeSampleXbox
             ApplicationView.GetForCurrentView().SetDesiredBoundsMode(
                 ApplicationViewBoundsMode.UseCoreWindow);
 
+            // Vizbee bridge: hand any protocol-activation URI (e.g. DIAL or
+            // app-to-app deeplink) to the bridge BEFORE MainPage initialises.
+            // The Xbox SDK reads this on first init to recover the launch
+            // parameters from the mobile sender. Same hook Fox+ uses.
+            if (args.Kind == ActivationKind.Protocol)
+            {
+                var protocolArgs = args as ProtocolActivatedEventArgs;
+                if (protocolArgs?.Uri != null)
+                {
+                    Vizbee.Xbox.WebView2Bridge.UpdateLaunchParams(protocolArgs.Uri.ToString());
+                }
+            }
+
             Frame rootFrame = Window.Current.Content as Frame;
             if (rootFrame == null)
             {

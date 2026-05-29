@@ -117,6 +117,13 @@
     <!-- The Chromium WebView2 SDK proper. Runtime must be installed on Xbox
          (shipped in recent systemOS updates). -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2210.55" />
+    <!-- Vizbee's WinRT-to-JS host bridge for WebView2 on Xbox UWP. Exposes the
+         Windows.Networking.Connectivity / Windows.System.Profile / etc. APIs
+         that the Xbox build of the Vizbee SDK reaches for via window.Windows.*
+         — which doesn't exist natively in WebView2. Without this attach call,
+         the SDK throws on init and pairing never works. Same package Fox+
+         uses; published to nuget.org. -->
+    <PackageReference Include="Vizbee.Xbox.WebView2Bridge" Version="1.0.0" />
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">

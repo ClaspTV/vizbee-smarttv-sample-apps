@@ -1,4 +1,5 @@
 using System;
+using Vizbee.Xbox;
 using Windows.ApplicationModel;
 using Windows.System;
 using Windows.UI.Core;
@@ -52,6 +53,14 @@ namespace VizbeeSampleXbox
             await WebView.EnsureCoreWebView2Async();
             WebView.Focus(FocusState.Programmatic);
 
+            // Attach Vizbee's WinRT host-object bridge. This exposes the
+            // Windows.Networking.Connectivity / Windows.System.Profile / etc.
+            // APIs that the Xbox build of the Vizbee SDK calls via
+            // window.Windows.* — APIs WebView2 doesn't expose natively. Same
+            // pattern Fox+ uses; without this call the SDK silently fails on
+            // init when it reaches for those APIs.
+            await WebView2Bridge.AttachAsync(WebView);
+
             var core = WebView.CoreWebView2;
             if (core == null) return;
 
@@ -63,54 +72,82 @@ namespace VizbeeSampleXbox
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = true; // disable in production
 
-            // Diagnostic overlay injected into the hosted page so we can see
-            // what WebView2 actually thinks its viewport is (innerWidth/Height,
-            // devicePixelRatio, and document scroll size). Top-left corner,
-            // green-on-black. Also kills all scrollbars — body/html overflow
-            // is set hidden, and WebKit/Firefox scrollbar pseudo-elements are
-            // suppressed for any inner container the app might have set to
-            // overflow:auto (settings panels, etc.).
-            // MUST register before the first Navigate() so the script fires
-            // for the initial page load — see MainPage.xaml for context.
-            await core.AddScriptToExecuteOnDocumentCreatedAsync(@"
-                (function() {
-                  const css = document.createElement('style');
-                  css.textContent =
-                    'html,body{overflow:hidden!important;margin:0!important;padding:0!important;}' +
-                    /* Hide scrollbars on every element (Chromium pseudo). */
-                    '*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}' +
-                    /* Firefox-style scrollbar suppression (harmless in Chromium). */
-                    '*{scrollbar-width:none!important;}';
-                  document.documentElement.appendChild(css);
+            // Diagnostic overlay + scrollbar killer. Idempotent (re-running
+            // does nothing if the overlay is already mounted) and injected via
+            // BOTH mechanisms — AddScriptToExecuteOnDocumentCreatedAsync (for
+            // future navigations) and NavigationCompleted (for the current
+            // page). Belt-and-suspenders because AddScriptToExecute… is
+            // unreliable for the initial load on WinUI 2.x WebView2.
+            const string diagnosticScript = @"
+                (function(){
+                  if (window.__xboxDbgMounted) return;
+                  window.__xboxDbgMounted = true;
+                  function injectCss() {
+                    if (document.getElementById('__xbox_dbg_css')) return;
+                    var css = document.createElement('style');
+                    css.id = '__xbox_dbg_css';
+                    css.textContent =
+                      'html,body{overflow:hidden!important;margin:0!important;padding:0!important;}' +
+                      '*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}' +
+                      '*{scrollbar-width:none!important;}';
+                    (document.head || document.documentElement).appendChild(css);
+                  }
                   function mountOverlay() {
-                    const o = document.createElement('div');
+                    if (document.getElementById('__xbox_debug')) return;
+                    var o = document.createElement('div');
                     o.id = '__xbox_debug';
                     o.style.cssText = 'position:fixed;top:0;left:0;background:rgba(0,0,0,0.65);color:#1ed679;font:13px Consolas,monospace;padding:6px 10px;z-index:2147483647;border-radius:0 0 6px 0;pointer-events:none;white-space:pre;';
-                    const update = () => {
-                      const d = document.documentElement;
+                    var update = function() {
+                      var d = document.documentElement;
+                      var s = (window.services && window.services()) || null;
+                      var pname = s && s.platform && s.platform.name || 'unknown';
+                      var sdkVer = (window.VZB && window.VZB.VERSION) || '(not loaded)';
+                      var homessoVer = (window.vizbee && window.vizbee.homesso && window.vizbee.homesso.VERSION) || '(not loaded)';
                       o.textContent =
                         'viewport: ' + window.innerWidth + 'x' + window.innerHeight + '\n' +
                         'dpr:      ' + window.devicePixelRatio + '\n' +
                         'doc-size: ' + d.scrollWidth + 'x' + d.scrollHeight + '\n' +
+                        'platform: ' + pname + '\n' +
+                        'VZB SDK:  ' + sdkVer + '\n' +
+                        'HomeSSO:  ' + homessoVer + '\n' +
                         'last key: (waiting)';
-                      window.__xboxDbgUpdate = (kn) => {
-                        o.textContent = o.textContent.replace(/last key:.*/, 'last key: ' + kn);
-                      };
                     };
-                    update();
+                    window.__xboxDbgUpdate = function(kn) {
+                      o.textContent = o.textContent.replace(/last key:.*/, 'last key: ' + kn);
+                    };
                     window.addEventListener('resize', update);
-                    window.addEventListener('keydown', (ev) =>
-                      window.__xboxDbgUpdate && window.__xboxDbgUpdate(ev.key + ' (code=' + ev.keyCode + ')')
-                    );
+                    window.addEventListener('keydown', function(ev) {
+                      window.__xboxDbgUpdate(ev.key + ' (code=' + ev.keyCode + ')');
+                    });
                     document.body.appendChild(o);
+                    update();
+                    // Re-update every 2s so SDK loads show up after they register.
+                    setInterval(update, 2000);
                   }
-                  if (document.body) mountOverlay();
-                  else document.addEventListener('DOMContentLoaded', mountOverlay, { once: true });
+                  function ready(fn){
+                    if (document.body) fn();
+                    else document.addEventListener('DOMContentLoaded', fn, { once: true });
+                  }
+                  ready(function(){ injectCss(); mountOverlay(); });
                 })();
-            ");
+            ";
 
-            // Navigate AFTER script registration so the script runs on the
-            // initial page load too (not just on subsequent navigations).
+            // Mechanism A: register for all future navigations.
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(diagnosticScript);
+
+            // Mechanism B: also inject after each navigation completes. The
+            // script's `__xboxDbgMounted` guard makes re-runs a no-op, so
+            // this is purely a safety net when (A) doesn't fire on first load.
+            core.NavigationCompleted += async (s, args) =>
+            {
+                if (args.IsSuccess)
+                {
+                    try { await core.ExecuteScriptAsync(diagnosticScript); } catch { }
+                }
+            };
+
+            // Navigate AFTER script registration so (A) fires on the initial
+            // page load. (B) will also fire when this navigation completes.
             core.Navigate("https://d1a16fhfuhnwgt.cloudfront.net/xbox/index.html");
 
             // BRIDGE PLACEHOLDER. If a future Vizbee SDK build needs Windows.*
