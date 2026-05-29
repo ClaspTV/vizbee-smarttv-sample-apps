@@ -23,13 +23,19 @@ namespace VizbeeSampleXbox
             // that point Window.Current.CoreWindow is guaranteed to exist.
         }
 
+        // Cached so CoreWindow_KeyDown can re-render the badge with the version
+        // prefix + the last key press.
+        private string _baseBadgeText = "";
+        private int _keyEventCount = 0;
+
         private async void MainPage_Loaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
             // Build-marker badge — generated from the package version baked
             // into THIS .msix by msbuild. If the user can't see this text on
             // the TV, whatever's running isn't from this build.
             var v = Package.Current.Id.Version;
-            VersionLabel.Text = $"build v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+            _baseBadgeText = $"build v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+            VersionLabel.Text = _baseBadgeText;
 
             // The WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS env var was previously
             // set here, but XAML's <muxc:WebView2 Source="..."> kicks off
@@ -57,6 +63,43 @@ namespace VizbeeSampleXbox
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.AreDevToolsEnabled = true; // disable in production
 
+            // Diagnostic overlay injected into the hosted page so we can see
+            // what WebView2 actually thinks its viewport is (innerWidth/Height,
+            // devicePixelRatio, and document scroll size). Top-left corner,
+            // green-on-black. Also disables page scrolling — D-pad-induced
+            // scroll has been the leading suspect for the "zoomed" feel.
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(@"
+                (function() {
+                  const css = document.createElement('style');
+                  css.textContent = 'html,body{overflow:hidden!important;margin:0!important;padding:0!important;}';
+                  document.documentElement.appendChild(css);
+                  function mountOverlay() {
+                    const o = document.createElement('div');
+                    o.id = '__xbox_debug';
+                    o.style.cssText = 'position:fixed;top:0;left:0;background:rgba(0,0,0,0.65);color:#1ed679;font:13px Consolas,monospace;padding:6px 10px;z-index:2147483647;border-radius:0 0 6px 0;pointer-events:none;white-space:pre;';
+                    const update = () => {
+                      const d = document.documentElement;
+                      o.textContent =
+                        'viewport: ' + window.innerWidth + 'x' + window.innerHeight + '\n' +
+                        'dpr:      ' + window.devicePixelRatio + '\n' +
+                        'doc-size: ' + d.scrollWidth + 'x' + d.scrollHeight + '\n' +
+                        'last key: (waiting)';
+                      window.__xboxDbgUpdate = (kn) => {
+                        o.textContent = o.textContent.replace(/last key:.*/, 'last key: ' + kn);
+                      };
+                    };
+                    update();
+                    window.addEventListener('resize', update);
+                    window.addEventListener('keydown', (ev) =>
+                      window.__xboxDbgUpdate && window.__xboxDbgUpdate(ev.key + ' (code=' + ev.keyCode + ')')
+                    );
+                    document.body.appendChild(o);
+                  }
+                  if (document.body) mountOverlay();
+                  else document.addEventListener('DOMContentLoaded', mountOverlay, { once: true });
+                })();
+            ");
+
             // BRIDGE PLACEHOLDER. If a future Vizbee SDK build needs Windows.*
             // APIs (network info, device id, advertising id, lifecycle), expose
             // them as a host object here:
@@ -72,6 +115,15 @@ namespace VizbeeSampleXbox
         // intercepted BEFORE WebView2's internal scroll handler sees it.
         private void CoreWindow_KeyDown(CoreWindow sender, KeyEventArgs args)
         {
+            // Visible feedback that the handler fires AT ALL (independent of
+            // whether the synthetic dispatch into JS works). Press D-pad on
+            // the controller and watch the top-right badge change. If it
+            // doesn't change, CoreWindow.KeyDown isn't firing for gamepad
+            // input on this Xbox build — a platform-level limitation no
+            // amount of code can route around from inside the app.
+            _keyEventCount++;
+            VersionLabel.Text = $"{_baseBadgeText}  #{_keyEventCount} {args.VirtualKey}";
+
             string keyName;
             int keyCode;
             switch (args.VirtualKey)
