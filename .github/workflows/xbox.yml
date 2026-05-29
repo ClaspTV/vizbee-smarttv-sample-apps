@@ -1,5 +1,5 @@
 # Builds the Xbox UWP shell on a Windows runner and uploads a signed
-# `.msixbundle` (+ matching `.cer`) as a workflow artifact.
+# `.msix` (+ matching `.cer`) as a workflow artifact.
 #
 # Trigger model — opt-in per PR via a checkbox in the PR body:
 #
@@ -16,7 +16,7 @@
 # Sideload from your Mac:
 #   1. Download the `VizbeeSampleXbox-msix` artifact, unzip it.
 #   2. Xbox Device Portal (https://<xbox-ip>) → Home → Add → upload the
-#      .msixbundle AND the .cer in the same dialog.
+#      .msix AND the .cer in the same dialog.
 #   3. Launch from Xbox dashboard.
 name: Generate Xbox Build
 
@@ -134,7 +134,7 @@ jobs:
 
       # Stamp the run number into the manifest version so every build produces
       # a unique, visible identifier (e.g. 0.1.0.42). This is the single most
-      # useful verification signal: the version in the .msixbundle filename,
+      # useful verification signal: the version in the .msix filename,
       # the sticky PR comment, and Device Portal's app list all agree, so you
       # can confirm at a glance which build is actually installed.
       - name: Bump manifest version with run number
@@ -172,12 +172,17 @@ jobs:
 
       - name: Build MSIX (Release | x64 | Sideload)
         run: |
+          # AppxBundle=Never: Xbox is x64-only, no multi-arch bundle needed.
+          # Bundling a SideloadOnly .msix payload also fails on older platform
+          # mins (we target 10.0.17763.0) with APPX 0x80080215 ("Non appx
+          # extensions are not allowed for payload packages targeting older
+          # platforms"). Single .msix is what Device Portal sideload expects.
           msbuild VizbeeSampleXbox.csproj `
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:UapAppxPackageBuildMode=SideloadOnly `
             /p:AppxBundlePlatforms=x64 `
-            /p:AppxBundle=Always `
+            /p:AppxBundle=Never `
             /p:AppxPackageSigningEnabled=true `
             /p:PackageCertificateKeyFile=VizbeeSampleXbox_TemporaryKey.pfx `
             /p:PackageCertificatePassword=vizbee `
@@ -191,8 +196,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VizbeeSampleXbox-msix
+          # AppxBundle=Never emits a single .msix (no .msixbundle); MSBuild
+          # places it under either AppPackages\…_Test\ or bin\x64\Release\
+          # depending on the run, so glob both.
           path: |
-            platforms/xbox/shell/AppPackages/**/*.msixbundle
+            platforms/xbox/shell/AppPackages/**/*.msix
+            platforms/xbox/shell/bin/**/*.msix
             platforms/xbox/shell/VizbeeSampleXbox_TemporaryKey.cer
           if-no-files-found: error
           retention-days: 14
@@ -220,7 +229,7 @@ jobs:
           ### 🎮 Xbox build ready
 
           **Download:** [VizbeeSampleXbox-msix.zip]($ARTIFACT_URL)
-          Contains \`VizbeeSampleXbox_*.msixbundle\` + \`VizbeeSampleXbox_TemporaryKey.cer\`. Sideload via Xbox Device Portal → Home → Add.
+          Contains \`VizbeeSampleXbox_*.msix\` + \`VizbeeSampleXbox_TemporaryKey.cer\`. Sideload via Xbox Device Portal → Home → Add.
 
           - **Version:** \`0.1.0.${{ github.run_number }}\` (look for this in Device Portal → My games & apps to confirm install)
           - **Commit:** \`$short_sha\`
