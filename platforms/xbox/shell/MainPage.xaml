@@ -13,9 +13,12 @@
       bridge is attached.
     -->
     <Grid>
+        <!-- Source is set programmatically in MainPage_Loaded (not inline)
+             so we can register AddScriptToExecuteOnDocumentCreatedAsync
+             BEFORE the first navigation — otherwise the injected CSS and
+             diagnostic overlay miss the initial page load. -->
         <muxc:WebView2
             x:Name="WebView"
-            Source="https://d1a16fhfuhnwgt.cloudfront.net/xbox/index.html"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch" />
         <!-- Build-marker overlay. Visible in the top-right corner of the TV

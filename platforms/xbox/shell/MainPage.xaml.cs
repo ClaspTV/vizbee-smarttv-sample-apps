@@ -66,12 +66,21 @@ namespace VizbeeSampleXbox
             // Diagnostic overlay injected into the hosted page so we can see
             // what WebView2 actually thinks its viewport is (innerWidth/Height,
             // devicePixelRatio, and document scroll size). Top-left corner,
-            // green-on-black. Also disables page scrolling — D-pad-induced
-            // scroll has been the leading suspect for the "zoomed" feel.
+            // green-on-black. Also kills all scrollbars — body/html overflow
+            // is set hidden, and WebKit/Firefox scrollbar pseudo-elements are
+            // suppressed for any inner container the app might have set to
+            // overflow:auto (settings panels, etc.).
+            // MUST register before the first Navigate() so the script fires
+            // for the initial page load — see MainPage.xaml for context.
             await core.AddScriptToExecuteOnDocumentCreatedAsync(@"
                 (function() {
                   const css = document.createElement('style');
-                  css.textContent = 'html,body{overflow:hidden!important;margin:0!important;padding:0!important;}';
+                  css.textContent =
+                    'html,body{overflow:hidden!important;margin:0!important;padding:0!important;}' +
+                    /* Hide scrollbars on every element (Chromium pseudo). */
+                    '*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}' +
+                    /* Firefox-style scrollbar suppression (harmless in Chromium). */
+                    '*{scrollbar-width:none!important;}';
                   document.documentElement.appendChild(css);
                   function mountOverlay() {
                     const o = document.createElement('div');
@@ -99,6 +108,10 @@ namespace VizbeeSampleXbox
                   else document.addEventListener('DOMContentLoaded', mountOverlay, { once: true });
                 })();
             ");
+
+            // Navigate AFTER script registration so the script runs on the
+            // initial page load too (not just on subsequent navigations).
+            core.Navigate("https://d1a16fhfuhnwgt.cloudfront.net/xbox/index.html");
 
             // BRIDGE PLACEHOLDER. If a future Vizbee SDK build needs Windows.*
             // APIs (network info, device id, advertising id, lifecycle), expose
@@ -128,14 +141,24 @@ namespace VizbeeSampleXbox
             int keyCode;
             switch (args.VirtualKey)
             {
-                case VirtualKey.GamepadDPadUp:    keyName = "ArrowUp";    keyCode = 38; break;
-                case VirtualKey.GamepadDPadDown:  keyName = "ArrowDown";  keyCode = 40; break;
-                case VirtualKey.GamepadDPadLeft:  keyName = "ArrowLeft";  keyCode = 37; break;
-                case VirtualKey.GamepadDPadRight: keyName = "ArrowRight"; keyCode = 39; break;
-                case VirtualKey.GamepadA:         keyName = "Enter";      keyCode = 13; break;
-                case VirtualKey.GamepadB:         keyName = "Escape";     keyCode = 27; break;  // BACK
-                case VirtualKey.GamepadView:      keyName = "Backspace";  keyCode = 8;  break;
-                case VirtualKey.GamepadMenu:      keyName = "ContextMenu"; keyCode = 93; break;
+                // D-pad — discrete, single fire per press.
+                case VirtualKey.GamepadDPadUp:                keyName = "ArrowUp";    keyCode = 38; break;
+                case VirtualKey.GamepadDPadDown:              keyName = "ArrowDown";  keyCode = 40; break;
+                case VirtualKey.GamepadDPadLeft:              keyName = "ArrowLeft";  keyCode = 37; break;
+                case VirtualKey.GamepadDPadRight:             keyName = "ArrowRight"; keyCode = 39; break;
+                // Left analog stick — also routed as keyboard arrows so users
+                // who navigate with the stick get the same behaviour as D-pad.
+                // Xbox emits these repeatedly while the stick is deflected,
+                // which is fine for menu navigation (acts like auto-repeat).
+                case VirtualKey.GamepadLeftThumbstickUp:      keyName = "ArrowUp";    keyCode = 38; break;
+                case VirtualKey.GamepadLeftThumbstickDown:    keyName = "ArrowDown";  keyCode = 40; break;
+                case VirtualKey.GamepadLeftThumbstickLeft:    keyName = "ArrowLeft";  keyCode = 37; break;
+                case VirtualKey.GamepadLeftThumbstickRight:   keyName = "ArrowRight"; keyCode = 39; break;
+                // Face buttons.
+                case VirtualKey.GamepadA:                     keyName = "Enter";      keyCode = 13; break;
+                case VirtualKey.GamepadB:                     keyName = "Escape";     keyCode = 27; break;  // BACK
+                case VirtualKey.GamepadView:                  keyName = "Backspace";  keyCode = 8;  break;
+                case VirtualKey.GamepadMenu:                  keyName = "ContextMenu"; keyCode = 93; break;
                 default: return;  // not a gamepad key we handle — let it fall through
             }
 
