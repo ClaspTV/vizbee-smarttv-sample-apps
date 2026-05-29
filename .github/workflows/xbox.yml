@@ -141,10 +141,12 @@ jobs:
         run: |
           $version = "0.1.0.${{ github.run_number }}"
           $manifest = "Package.appxmanifest"
-          (Get-Content $manifest -Raw) -replace 'Version="[0-9.]+"', "Version=`"$version`"" |
+          # -creplace (case-sensitive) so we don't also match the XML
+          # declaration's lowercase `version="1.0"` and corrupt line 1.
+          (Get-Content $manifest -Raw) -creplace 'Version="[0-9.]+"', "Version=`"$version`"" |
             Set-Content $manifest -NoNewline
           Write-Host "Bumped manifest version to $version"
-          Select-String -Path $manifest -Pattern 'Version=' | Select-Object -First 1
+          Select-String -Path $manifest -Pattern 'Version=' -CaseSensitive | Select-Object -First 1
 
       - name: Restore NuGet packages
         run: nuget restore VizbeeSampleXbox.sln
