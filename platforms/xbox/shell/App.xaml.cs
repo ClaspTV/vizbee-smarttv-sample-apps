@@ -1,3 +1,4 @@
+using System;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.UI.ViewManagement;
@@ -14,6 +15,28 @@ namespace VizbeeSampleXbox
     {
         public App()
         {
+            // WebView2's browser args env var MUST be set before InitializeComponent
+            // runs. MainPage.xaml declares the WebView2's Source inline, so the
+            // CoreWebView2 child process spawns the moment XAML is parsed —
+            // earlier than App's OnLaunched, MainPage's ctor, or MainPage_Loaded.
+            // Setting this here is the only point that's still ahead of that.
+            //  --autoplay-policy=no-user-gesture-required: Vizbee deeplink → player
+            //    calls videoEl.play() without prior user gesture; Chromium would
+            //    reject it otherwise.
+            //  --remote-debugging-port=9222 + --remote-debugging-address=0.0.0.0:
+            //    expose Chrome DevTools Protocol on the LAN for chrome://inspect.
+            //    Dev-only — anyone on the LAN can attach.
+            Environment.SetEnvironmentVariable(
+                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                "--autoplay-policy=no-user-gesture-required " +
+                "--remote-debugging-port=9222 " +
+                "--remote-debugging-address=0.0.0.0 " +
+                // Xbox UWP can report a devicePixelRatio that isn't 1.0,
+                // which makes the page render larger than the 1920x1080 the
+                // viewport meta requests — the visible symptom is the
+                // "everything is zoomed in" feel. Force CSS-pixel:DIP = 1:1.
+                "--force-device-scale-factor=1");
+
             this.InitializeComponent();
             // Xbox: by default UWP apps get a virtual gamepad cursor (right-stick
             // moves a mouse pointer overlay) so generic web apps can be clicked.

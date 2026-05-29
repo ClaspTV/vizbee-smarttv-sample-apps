@@ -1,8 +1,8 @@
 using System;
 using Windows.System;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Navigation;
 
 namespace VizbeeSampleXbox
@@ -18,49 +18,25 @@ namespace VizbeeSampleXbox
         {
             this.InitializeComponent();
             this.Loaded += MainPage_Loaded;
-            // WebView2 on Xbox absorbs gamepad VirtualKeys as page-scroll input
-            // (the visible scrollbar + "zoomed-in feel" are the symptom). Catch
-            // KeyDown at the Page even when WebView2 has marked the event
-            // handled, translate Gamepad keys to a synthetic KeyboardEvent in
-            // the web app, and mark the original handled so the WebView2 stops
-            // scrolling. RemoteKeyService listens to window.keydown, so this
-            // restores all D-pad / A / B navigation in the sample app.
-            this.AddHandler(
-                UIElement.KeyDownEvent,
-                new KeyEventHandler(OnPageKeyDown),
-                handledEventsToo: true);
+            // Subscribing to CoreWindow.KeyDown happens in MainPage_Loaded — by
+            // that point Window.Current.CoreWindow is guaranteed to exist.
         }
 
         private async void MainPage_Loaded(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
-            // --autoplay-policy=no-user-gesture-required tells Chromium to let
-            // <video> auto-play without a prior user gesture. Vizbee's mobile
-            // cast lands the user on /player/{id} programmatically, so without
-            // this flag PlayerPage's videoEl.play() is rejected by Chromium.
-            //
-            // WinUI 2.x's Microsoft.UI.Xaml.Controls.WebView2 doesn't expose
-            // the EnsureCoreWebView2Async(CoreWebView2Environment) overload,
-            // so we pass browser args via the documented process env var that
-            // WebView2 reads when it spawns its browser process. MUST be set
-            // before EnsureCoreWebView2Async() is awaited.
-            // Browser flags read by WebView2 at process spawn:
-            //  --autoplay-policy=no-user-gesture-required: allow PlayerPage's
-            //    videoEl.play() to fire when the user lands via Vizbee deeplink
-            //    (no prior tap/click on Xbox).
-            //  --remote-debugging-port=9222: expose Chrome DevTools Protocol on
-            //    that port so chrome://inspect on the Mac can attach to this
-            //    WebView2 (live console, network, JS debugger). Dev-only — turn
-            //    off in release builds (anyone on the LAN can attach).
-            Environment.SetEnvironmentVariable(
-                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-                "--autoplay-policy=no-user-gesture-required " +
-                "--remote-debugging-port=9222 " +
-                "--remote-debugging-address=0.0.0.0");
+            // The WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS env var was previously
+            // set here, but XAML's <muxc:WebView2 Source="..."> kicks off
+            // CoreWebView2 init at parse time — before MainPage_Loaded fires.
+            // That made --remote-debugging-port silently no-op. It's now set
+            // in App's constructor, ahead of InitializeComponent.
+
+            // Hook CoreWindow.KeyDown — fires BEFORE WebView2's Win32 message
+            // pump consumes gamepad input. Page-level AddHandler(KeyDownEvent)
+            // didn't catch gamepad keys because WebView2 swallows them below
+            // XAML routing. CoreWindow is the correct entry point.
+            Window.Current.CoreWindow.KeyDown += CoreWindow_KeyDown;
 
             await WebView.EnsureCoreWebView2Async();
-
-            // WebView2 must hold focus for keydown events to flow through to
-            // the AddHandler bridge installed in the constructor.
             WebView.Focus(FocusState.Programmatic);
 
             var core = WebView.CoreWebView2;
@@ -84,14 +60,14 @@ namespace VizbeeSampleXbox
         }
 
         // Map Xbox gamepad VirtualKeys to the standard keyboard equivalents
-        // RemoteKeyService listens for. Fire-and-forget — ExecuteScriptAsync
-        // is awaited internally; the synthesized event is delivered in the
-        // next WebView2 tick which is fast enough for navigation.
-        private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
+        // RemoteKeyService listens for, and fire a synthetic JS KeyboardEvent
+        // into the WebView2. Runs on CoreWindow.KeyDown so the event is
+        // intercepted BEFORE WebView2's internal scroll handler sees it.
+        private void CoreWindow_KeyDown(CoreWindow sender, KeyEventArgs args)
         {
             string keyName;
             int keyCode;
-            switch (e.Key)
+            switch (args.VirtualKey)
             {
                 case VirtualKey.GamepadDPadUp:    keyName = "ArrowUp";    keyCode = 38; break;
                 case VirtualKey.GamepadDPadDown:  keyName = "ArrowDown";  keyCode = 40; break;
@@ -99,7 +75,7 @@ namespace VizbeeSampleXbox
                 case VirtualKey.GamepadDPadRight: keyName = "ArrowRight"; keyCode = 39; break;
                 case VirtualKey.GamepadA:         keyName = "Enter";      keyCode = 13; break;
                 case VirtualKey.GamepadB:         keyName = "Escape";     keyCode = 27; break;  // BACK
-                case VirtualKey.GamepadView:      keyName = "Backspace";  keyCode = 8;  break;  // also BACK on some flows
+                case VirtualKey.GamepadView:      keyName = "Backspace";  keyCode = 8;  break;
                 case VirtualKey.GamepadMenu:      keyName = "ContextMenu"; keyCode = 93; break;
                 default: return;  // not a gamepad key we handle — let it fall through
             }
@@ -107,11 +83,8 @@ namespace VizbeeSampleXbox
             var core = WebView?.CoreWebView2;
             if (core == null) return;
 
-            // Build the JS that fires a synthetic keydown on window. The web
-            // app's RemoteKeyService reads e.key first, falling back to keyCode,
-            // so we set both — and we pass isTrusted via the constructor
-            // (read-only at runtime, but constructed events look real enough
-            // for plain listeners that don't check e.isTrusted).
+            // Synthetic window.keydown that RemoteKeyService picks up. Set both
+            // `key` (string) and `keyCode` (numeric) so either lookup matches.
             string js =
                 "window.dispatchEvent(new KeyboardEvent('keydown', { " +
                 $"key: '{keyName}', code: '{keyName}', " +
@@ -121,8 +94,8 @@ namespace VizbeeSampleXbox
 
             // Mark handled so WebView2 doesn't also use this key for its
             // built-in spatial scroll — that's what was causing the visible
-            // scrollbar and the "zoomed in" feel.
-            e.Handled = true;
+            // scrollbar and the "zoomed-in" feel.
+            args.Handled = true;
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
