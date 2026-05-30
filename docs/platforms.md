@@ -193,6 +193,15 @@ Windows.System.Profile.AnalyticsInfo.versionInfo.deviceFamily
 D-pad maps to standard arrow keys. Controller buttons:
 `195` (A → ENTER), `196` (B → BACK).
 
+### Vizbee SDK build
+
+Like Tizen and webOS, Xbox can load any of four SDK builds — **full/light ×
+ES5/ES6** — selectable at runtime (Settings → *Vizbee SDK*, default `light-es5`).
+The `full` build is the legacy EdgeHTML/WinRT SDK; the new WebView2 shell needs
+the WebView2-compatible `light` (`@vizbeetv/sdk` xbox) builds — see the WinRT
+caveat in [the Xbox shell README](../platforms/xbox/shell/README.md) and
+[vizbee-sdk.md](vizbee-sdk.md#urls-by-platform--variant).
+
 ### Packaging
 
 ```bash

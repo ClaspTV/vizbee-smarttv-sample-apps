@@ -96,7 +96,7 @@ Then just relaunch the app on Xbox — WebView2 fetches the fresh build.
 
 ## The Vizbee SDK ↔ WebView2 caveat
 
-The current `xbox` SDK build at `https://sdk.claspws.tv/xbox_one/v7/vizbee.js`
+The `full` Xbox SDK build at `https://sdk.claspws.tv/v7/vizbee.js`
 uses **8 WinRT JS APIs** (`Windows.Networking.Connectivity.*`,
 `Windows.System.Profile.*`, `Windows.UI.WebUI.WebUIApplication`, etc.) that
 were available via the EdgeHTML JS bridge. **WebView2 does not expose
@@ -110,8 +110,10 @@ were available via the EdgeHTML JS bridge. **WebView2 does not expose
 
 **Two ways to fix:**
 
-1. **Recommended — ship a WebView2-compatible SDK build.** Swap the URL in
-   `src/services/vizbee/VizbeeService.ts` (see TODO comment). The build
+1. **Recommended — use a WebView2-compatible SDK build.** Select a `light`
+   variant in Settings → *Vizbee SDK* (`light-es5` / `light-es6`); these load
+   the `@vizbeetv/sdk` xbox bundles from the dev origin, defined in
+   `SDK_URL_BY_VARIANT.xbox` in `src/services/vizbee/VizbeeService.ts`. The build
    should either be pure-web (Chromium-native APIs + cloud signalling) or
    read its data from a host object exposed by this shell.
 

@@ -33,7 +33,7 @@ when running in the browser.
 
 | Axis | Values | Meaning |
 |---|---|---|
-| **Build** | `full` / `light` | `full` = the complete v7 SDK from the Vizbee CDN (`sdk.claspws.tv`). `light` = the slimmer Vizbee-TV continuity build (`vizbee_vtv_sdk_v2_*`) served from the dev origin. |
+| **Build** | `full` / `light` | `full` = the complete v7 SDK from the Vizbee CDN (`sdk.claspws.tv`). `light` = the slimmer Vizbee-TV continuity build (the `@vizbeetv/sdk` per-platform bundle) served from the dev origin (`vzb-origin-dev`). |
 | **Target** | `es5` / `es6` | JavaScript language target. `es5` for older TV engines (Chromium ~53–63: webOS 4, Tizen 4–5, older Vizio). `es6` for newer engines. |
 
 Combined, the `vizbeeSdk` flag has four values: `full-es5`, `full-es6`,
@@ -41,15 +41,15 @@ Combined, the `vizbeeSdk` flag has four values: `full-es5`, `full-es6`,
 
 ## Platform support
 
-Only **Tizen** and **webOS** expose all four builds. Vizio and Xbox ship a
-single CDN build (the flag does not apply to them); desktop loads nothing.
+**Tizen**, **webOS** and **Xbox** expose all four builds. Vizio ships a single
+CDN build (the flag does not apply to it); desktop loads nothing.
 
 | Platform | Variant-selectable? | Source |
 |---|---|---|
 | Samsung Tizen | ✅ full/light × ES5/ES6 | `SDK_URL_BY_VARIANT.tizen` |
 | LG webOS | ✅ full/light × ES5/ES6 | `SDK_URL_BY_VARIANT.webos` |
+| Xbox | ✅ full/light × ES5/ES6 | `SDK_URL_BY_VARIANT.xbox` |
 | VizioSmartCast | ❌ single build | `SDK_URL_BY_PLATFORM.viziosmartcast` |
-| Xbox | ❌ single build | `SDK_URL_BY_PLATFORM.xbox` |
 | Desktop (dev) | — no SDK | gated off in `App.ts` |
 
 ### URLs by platform & variant
@@ -62,23 +62,35 @@ Defined in [`VizbeeService.ts`](../src/services/vizbee/VizbeeService.ts) →
 | Variant | URL |
 |---|---|
 | `full-es5` / `full-es6` | `https://sdk.claspws.tv/v7/vizbee.js` |
-| `light-es5` | `https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js` |
-| `light-es6` | `https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native_es6.js` |
+| `light-es5` | `https://vzb-origin-dev.s3.amazonaws.com/samsung/v7/vizbee.js` |
+| `light-es6` | `https://vzb-origin-dev.s3.amazonaws.com/samsung/es6/v7/vizbee.js` |
 
 **webOS**
 
 | Variant | URL |
 |---|---|
-| `full-es5` / `full-es6` | `https://sdk.claspws.tv/lg_webos/v7/vizbee.js` |
-| `light-es5` | `https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native.js` |
-| `light-es6` | `https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native_es6.js` |
+| `full-es5` / `full-es6` | `https://sdk.claspws.tv/v7/vizbee.js` |
+| `light-es5` | `https://vzb-origin-dev.s3.amazonaws.com/lg/v7/vizbee.js` |
+| `light-es6` | `https://vzb-origin-dev.s3.amazonaws.com/lg/es6/v7/vizbee.js` |
+
+**Xbox**
+
+| Variant | URL |
+|---|---|
+| `full-es5` / `full-es6` | `https://sdk.claspws.tv/v7/vizbee.js` |
+| `light-es5` | `https://vzb-origin-dev.s3.amazonaws.com/xbox/v7/vizbee.js` |
+| `light-es6` | `https://vzb-origin-dev.s3.amazonaws.com/xbox/es6/v7/vizbee.js` |
+
+> Xbox `full` is the legacy EdgeHTML/WinRT build; the new WebView2 shell
+> ([platforms/xbox/shell/](../platforms/xbox/shell/)) needs the WebView2-compatible
+> `light` (`@vizbeetv/sdk` xbox) builds — see the WinRT caveat in
+> [the Xbox shell README](../platforms/xbox/shell/README.md).
 
 **Single-build platforms**
 
 | Platform | URL |
 |---|---|
-| VizioSmartCast | `https://sdk.claspws.tv/vizio_smartcast/v7/vizbee.js` |
-| Xbox | `https://sdk.claspws.tv/xbox_one/v7/vizbee.js` |
+| VizioSmartCast | `https://sdk.claspws.tv/v7/vizbee.js` |
 
 > The **full** build serves the same URL for ES5 and ES6 (the CDN bundle
 > handles both targets); only the **light** builds split into separate files.

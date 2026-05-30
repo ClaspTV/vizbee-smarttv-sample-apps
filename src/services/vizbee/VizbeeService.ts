@@ -236,19 +236,10 @@ export class VizbeeService implements IVizbeeService {
 
 // Each TV platform ships its own SDK build; loading the wrong one yields a
 // broken handshake. `desktop` is intentionally absent — App.ts gates init off.
-// `tizen` and `webos` are resolved via SDK_URL_BY_VARIANT (Settings flag).
-//
-// XBOX NOTE: the URL below points at the legacy Xbox SDK that reaches into the
-// EdgeHTML WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
-// Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
-// platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
-// NOT exist — calls into this build will throw and break pairing / device info
-// reporting. Swap this to the WebView2-compatible Xbox SDK build once it's
-// published by the Vizbee SDK team (or wire a host-object bridge in
-// MainPage.xaml.cs to proxy the WinRT calls).
+// `tizen`, `webos` and `xbox` are resolved via SDK_URL_BY_VARIANT (Settings
+// flag); only Vizio falls back to this single-build map.
 const SDK_URL_BY_PLATFORM: Partial<Record<PlatformName, string>> = {
-  viziosmartcast: 'https://sdk.claspws.tv/vizio_smartcast/v7/vizbee.js',
-  xbox: 'https://sdk.claspws.tv/xbox_one/v7/vizbee.js',
+  viziosmartcast: 'https://sdk.claspws.tv/v7/vizbee.js',
 };
 
 // Platforms that expose the 4 selectable builds (full/light × ES5/ES6) via the
@@ -259,14 +250,28 @@ const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizb
   tizen: {
     'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
     'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native.js',
-    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_tizen_html_native_es6.js',
+    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/samsung/v7/vizbee.js',
+    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/samsung/es6/v7/vizbee.js',
   },
   webos: {
-    'full-es5': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
-    'full-es6': 'https://sdk.claspws.tv/lg_webos/v7/vizbee.js',
-    'light-es5': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native.js',
-    'light-es6': 'https://vzb-origin-dev.s3.us-east-1.amazonaws.com/sdk/test/vizbee_vtv_sdk_v2_lgwebos_html_native_es6.js',
+    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/lg/v7/vizbee.js',
+    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/lg/es6/v7/vizbee.js',
+  },
+  // XBOX NOTE: the `full` build is the legacy SDK that reaches into the EdgeHTML
+  // WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
+  // Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
+  // platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
+  // NOT exist — calls into that build will throw and break pairing / device info
+  // reporting. The `light` builds are the WebView2-compatible @vizbeetv/sdk xbox
+  // bundles; prefer those on the WebView2 shell (or wire a host-object bridge in
+  // MainPage.xaml.cs to proxy the WinRT calls for the full build).
+  xbox: {
+    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
+    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/xbox/v7/vizbee.js',
+    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/xbox/es6/v7/vizbee.js',
   },
 };
 
@@ -276,12 +281,28 @@ const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizb
 // constant is empty (script builds). Each package is a side-effect module that
 // populates window.vizbee. Add a branch per package as more ship.
 async function loadBundledSdk(): Promise<boolean> {
-  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-tizen-es5') {
-    await import('vizbee-qa-sdk-tizen-es5');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung') {
+    await import('@vizbeetv/sdk/samsung');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === 'vizbee-qa-sdk-lgwebos-es6') {
-    await import('vizbee-qa-sdk-lgwebos-es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung/es6') {
+    await import('@vizbeetv/sdk/samsung/es6');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg') {
+    await import('@vizbeetv/sdk/lg');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg/es6') {
+    await import('@vizbeetv/sdk/lg/es6');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox') {
+    await import('@vizbeetv/sdk/xbox');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox/es6') {
+    await import('@vizbeetv/sdk/xbox/es6');
     return true;
   }
   return false;
