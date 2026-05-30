@@ -2,8 +2,8 @@ import { Logger } from '@/services/logger/Logger';
 import { findVideo, registerVideo } from '@/data/videos';
 import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
+import { sdkOrigin } from '@/services/sdkEnv';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
-import type { FeatureFlags } from '@/services/feature-flags/flags';
 
 // vizbee.js is loaded as an external <script> in index.html and exposes
 // the global window.vizbee. No npm package; types come from the SDK guide.
@@ -103,15 +103,26 @@ export class VizbeeService implements IVizbeeService {
     }
   }
 
-  // Tizen and webOS ship 4 SDK builds selectable in Settings (full/light ×
-  // ES5/ES6); the `vizbeeSdk` flag picks one. Other platforms ship a single
-  // build, so the flag doesn't apply and they fall back to their per-platform URL.
+  // Compose the SDK <script> URL from two orthogonal axes:
+  //   - `sdkEnv`    → the origin host (dev/qa/prod) — see services/sdkEnv.ts
+  //   - `vizbeeSdk` → full vs light, ES5 vs ES6 (the path under that origin)
+  // Tizen/webOS/Xbox expose all four variants in Settings; Vizio ships a single
+  // monolithic build, and desktop has none (App.ts gates init off → undefined).
   private resolveSdkUrl(platform: PlatformName): string | undefined {
-    const variants = SDK_URL_BY_VARIANT[platform];
-    if (variants) {
-      return variants[services().flags.get('vizbeeSdk')];
-    }
-    return SDK_URL_BY_PLATFORM[platform];
+    const origin = sdkOrigin(services().flags.get('sdkEnv'));
+
+    // Vizio: single monolithic build at the env origin root (no full/light).
+    if (platform === 'viziosmartcast') return `${origin}/v7/vizbee.js`;
+
+    const segment = SDK_LIGHT_SEGMENT[platform];
+    if (!segment) return undefined;
+
+    const variant = services().flags.get('vizbeeSdk');
+    // full = the monolithic SDK at the origin root (one file serves ES5 + ES6).
+    if (variant.startsWith('full')) return `${origin}/v7/vizbee.js`;
+    // light = the per-target build under /<segment>/; ES6 adds an /es6/ segment.
+    const es6 = variant.endsWith('es6') ? 'es6/' : '';
+    return `${origin}/${segment}/${es6}v7/vizbee.js`;
   }
 
   private onDeeplink(videoInfo: any): void {
@@ -234,45 +245,22 @@ export class VizbeeService implements IVizbeeService {
   }
 }
 
-// Each TV platform ships its own SDK build; loading the wrong one yields a
-// broken handshake. `desktop` is intentionally absent — App.ts gates init off.
-// `tizen`, `webos` and `xbox` are resolved via SDK_URL_BY_VARIANT (Settings
-// flag); only Vizio falls back to this single-build map.
-const SDK_URL_BY_PLATFORM: Partial<Record<PlatformName, string>> = {
-  viziosmartcast: 'https://sdk.claspws.tv/v7/vizbee.js',
-};
-
-// Platforms that expose the 4 selectable builds (full/light × ES5/ES6) via the
-// `vizbeeSdk` Settings flag. Each full build serves both ES5 and ES6 from one
-// URL; the light builds are split by target. Platforms absent here ship a
-// single build and fall back to SDK_URL_BY_PLATFORM.
-const SDK_URL_BY_VARIANT: Partial<Record<PlatformName, Record<FeatureFlags['vizbeeSdk'], string>>> = {
-  tizen: {
-    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/samsung/v7/vizbee.js',
-    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/samsung/es6/v7/vizbee.js',
-  },
-  webos: {
-    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/lg/v7/vizbee.js',
-    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/lg/es6/v7/vizbee.js',
-  },
-  // XBOX NOTE: the `full` build is the legacy SDK that reaches into the EdgeHTML
-  // WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
-  // Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
-  // platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
-  // NOT exist — calls into that build will throw and break pairing / device info
-  // reporting. The `light` builds are the WebView2-compatible @vizbeetv/sdk xbox
-  // bundles; prefer those on the WebView2 shell (or wire a host-object bridge in
-  // MainPage.xaml.cs to proxy the WinRT calls for the full build).
-  xbox: {
-    'full-es5': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'full-es6': 'https://sdk.claspws.tv/v7/vizbee.js',
-    'light-es5': 'https://vzb-origin-dev.s3.amazonaws.com/xbox/v7/vizbee.js',
-    'light-es6': 'https://vzb-origin-dev.s3.amazonaws.com/xbox/es6/v7/vizbee.js',
-  },
+// Per-platform path segment for the `light` (per-target) SDK builds, under the
+// selected env origin. `desktop` is intentionally absent — App.ts gates init
+// off — as is Vizio, which ships a single monolithic build (no full/light).
+//
+// XBOX NOTE: the `full` build is the legacy SDK that reaches into the EdgeHTML
+// WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
+// Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
+// platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
+// NOT exist — calls into that build will throw and break pairing / device info
+// reporting. The `light` builds are the WebView2-compatible @vizbeetv/sdk xbox
+// bundles; prefer those on the WebView2 shell (or wire a host-object bridge in
+// MainPage.xaml.cs to proxy the WinRT calls for the full build).
+const SDK_LIGHT_SEGMENT: Partial<Record<PlatformName, string>> = {
+  tizen: 'samsung',
+  webos: 'lg',
+  xbox: 'xbox',
 };
 
 // Import the bundled SDK for npm builds. __SDK_NPM_PACKAGE__ is a build-time

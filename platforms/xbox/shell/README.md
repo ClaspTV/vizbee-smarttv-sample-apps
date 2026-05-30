@@ -112,8 +112,9 @@ were available via the EdgeHTML JS bridge. **WebView2 does not expose
 
 1. **Recommended — use a WebView2-compatible SDK build.** Select a `light`
    variant in Settings → *Vizbee SDK* (`light-es5` / `light-es6`); these load
-   the `@vizbeetv/sdk` xbox bundles from the dev origin, defined in
-   `SDK_URL_BY_VARIANT.xbox` in `src/services/vizbee/VizbeeService.ts`. The build
+   the `@vizbeetv/sdk` xbox bundles, composed by `resolveSdkUrl` (segment `xbox`)
+   in `src/services/vizbee/VizbeeService.ts` from the `sdkEnv`-selected origin
+   (dev/qa/prod — Settings → *Vizbee SDK Env*). The build
    should either be pure-web (Chromium-native APIs + cloud signalling) or
    read its data from a host object exposed by this shell.
 

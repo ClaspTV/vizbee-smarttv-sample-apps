@@ -1,6 +1,7 @@
 import { Logger } from '@/services/logger/Logger';
 import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate } from '@/services/sdkDeploymentDate';
+import { sdkOrigin } from '@/services/sdkEnv';
 
 // The HomeSSO SDK is loaded as an external <script>, same model as the main
 // Vizbee SDK (VizbeeService). It's a side-effect bundle that self-registers
@@ -9,12 +10,11 @@ import { fetchSdkDeploymentDate } from '@/services/sdkDeploymentDate';
 //
 // ES5/ES6 follows the Vizbee SDK selection via the `vizbeeSdk` flag's es5/es6
 // suffix. HomeSSO ships only script variants, so npm app builds map to the
-// script variant too (not the npmModule split) — for now. Loaded from the
-// origin bucket (vzb-origin-dev) so the dev/test builds are reachable from
-// every network. URL scheme mirrors the continuity SDK: the variant is an
+// script variant too (not the npmModule split) — for now. The origin host
+// follows the `sdkEnv` flag (dev/qa/prod), same as the continuity SDK — see
+// services/sdkEnv.ts. URL scheme mirrors the continuity SDK: the variant is an
 // explicit path segment and `v1` is the major pointer that tracks the latest
 // HomeSSO release (currently v1.0.1) — see @vizbeetv/homesso-sdk.
-const HOMESSO_SDK_ORIGIN = 'https://vzb-origin-dev.s3.amazonaws.com';
 const HOMESSO_SDK_MAJOR = 'v1';
 
 type EsVariant = 'es5' | 'es6';
@@ -26,7 +26,7 @@ function resolveEsVariant(): EsVariant {
 }
 
 const homeSSOUrl = (variant: EsVariant): string =>
-  `${HOMESSO_SDK_ORIGIN}/homesso/${variant}/${HOMESSO_SDK_MAJOR}/vizbee.js`;
+  `${sdkOrigin(services().flags.get('sdkEnv'))}/homesso/${variant}/${HOMESSO_SDK_MAJOR}/vizbee.js`;
 
 // Dummy values that drive the modal preview — there is no real paired phone.
 const PREVIEW_SIGN_IN_TYPE = 'preview-signin';

@@ -5,6 +5,11 @@
 export interface FeatureFlags {
   syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
+  // Which environment's origin the SDK <script> loads from (orthogonal to the
+  // full/light × ES5/ES6 variant — it only swaps the host). dev/qa = the S3
+  // origin buckets, prod = the public CDN. See services/sdkEnv.ts. Applies to
+  // script builds only; npm builds bundle the SDK from node_modules.
+  sdkEnv: 'dev' | 'qa' | 'prod';
   videoPlayer: 'html';
   // Which hosted app build to run: 'script' (external <script> SDK, …/webos/)
   // or 'npm' (node_modules-bundled SDK, …/webos-with-nodemodule/<module>/).
@@ -31,6 +36,7 @@ export interface FeatureFlags {
 export const DEFAULT_FLAGS: FeatureFlags = {
   appBuild: 'script',
   vizbeeSdk: 'light-es5',
+  sdkEnv: 'prod',
   syncConnection: 'pubnub',
   videoPlayer: 'html',
   npmModule: 'es5',
@@ -47,6 +53,7 @@ export type FlagValue = string | boolean;
 export const FLAG_LABELS: Record<FlagKey, string> = {
   syncConnection: 'Sync Connection',
   vizbeeSdk: 'Vizbee SDK',
+  sdkEnv: 'Vizbee SDK Env',
   videoPlayer: 'Video Player',
   appBuild: 'App Build',
   npmModule: 'NPM SDK Module',
@@ -66,6 +73,11 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
     { value: 'full-es6', label: 'Use Full Vizbee SDK - ES6' },
     { value: 'light-es5', label: 'Use Light Vizbee SDK - ES5' },
     { value: 'light-es6', label: 'Use Light Vizbee SDK - ES6' },
+  ],
+  sdkEnv: [
+    { value: 'dev', label: 'Dev (vzb-origin-dev)' },
+    { value: 'qa', label: 'QA (vzb-origin-qa)' },
+    { value: 'prod', label: 'Prod (sdk.claspws.tv)' },
   ],
   videoPlayer: [
     { value: 'html', label: 'Use HTML Player' },
