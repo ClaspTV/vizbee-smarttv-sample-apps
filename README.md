@@ -222,14 +222,19 @@ for the full integration recipe.
 
 ### SDK build variants (full/light × ES5/ES6)
 
-The SDK is loaded as a `<script>` at boot — not an npm package. On **Tizen** and
-**webOS** you can pick which build loads: **full** (CDN v7) or **light**
-(Vizbee-TV continuity build), each in an **ES5** or **ES6** target — four options
-in total, defaulting to `light-es5`. Vizio and Xbox use a single CDN build.
+The SDK is loaded as a `<script>` at boot — not an npm package. On **Tizen**,
+**webOS** and **Xbox** you can pick which build loads: **full** (CDN v7) or
+**light** (Vizbee-TV continuity build), each in an **ES5** or **ES6** target —
+four options in total, defaulting to `light-es5`. Vizio uses a single CDN build.
+
+A separate **Vizbee SDK Env** selector picks which origin the SDK loads from —
+**dev** / **qa** / **prod** (default `dev`) — orthogonal to the build choice.
 
 ```
 Settings → "Vizbee SDK"        # radio: Full/Light × ES5/ES6 (reloads to apply)
+Settings → "Vizbee SDK Env"    # radio: Dev/QA/Prod origin (reloads to apply)
 ?ff_vizbeeSdk=light-es6        # per-launch QA override
+?ff_sdkEnv=qa                  # per-launch env override
 ```
 
 The choice persists in `localStorage`; since the SDK script loads once at launch,

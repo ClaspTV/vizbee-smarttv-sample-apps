@@ -75,7 +75,8 @@ export function renderSettingsPage(root: HTMLElement): () => void {
         // Cast: set's overload narrows per key, but the loop's K is widened.
         onChange: (value) => {
           flags.set(optionsKey, value as never);
-          if (optionsKey === 'vizbeeSdk') promptSdkReload(value);
+          if (optionsKey === 'vizbeeSdk') promptSdkReload('vizbeeSdk', value);
+          else if (optionsKey === 'sdkEnv') promptSdkReload('sdkEnv', value);
           else if (optionsKey === 'npmModule') promptModuleSwitch(value);
           else if (optionsKey === 'appBuild') promptBuildSwitch(value);
         },
@@ -246,11 +247,12 @@ function promptAppIdReload(): void {
   });
 }
 
-// The Vizbee SDK <script> is injected once at boot, so switching builds only
-// takes effect on a fresh load. Offer an immediate reload to apply the picked
-// build now; "Later" keeps the selection (persisted) for the next launch.
-function promptSdkReload(value: string): void {
-  const label = (FLAG_OPTIONS.vizbeeSdk?.find((o) => o.value === value)?.label ?? '')
+// The Vizbee SDK <script> is injected once at boot, so switching the build
+// (vizbeeSdk) or its origin env (sdkEnv) only takes effect on a fresh load.
+// Offer an immediate reload to apply the picked value now; "Later" keeps the
+// selection (persisted) for the next launch.
+function promptSdkReload(key: 'vizbeeSdk' | 'sdkEnv', value: string): void {
+  const label = (FLAG_OPTIONS[key]?.find((o) => o.value === value)?.label ?? '')
     .replace(/^Use\s+/, '') || 'The selected SDK';
   showConfirmDialog({
     title: 'Reload to apply SDK?',

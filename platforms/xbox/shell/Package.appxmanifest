@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Native UWP shell manifest for the Vizbee sample app on Xbox.
+
+  Unlike the previous HWA model, there is NO StartPage="https://..." here —
+  Application points at the compiled C# binary (VizbeeSampleXbox.App), which
+  hosts a WebView2 control in MainPage.xaml and navigates it to the same
+  CloudFront-hosted web app that tizen/webos use. Result:
+    - WebView2 (Chromium) renders the web app, not legacy EdgeHTML.
+    - The .appx only re-ships when the shell itself changes; everyday web
+      updates go via `npm run ship:xbox` (S3 deploy of dist/xbox).
+-->
+<Package
+    xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+    xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+    xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    IgnorableNamespaces="uap mp rescap">
+
+  <Identity
+    Name="Vizbee.SampleWebapp.Xbox"
+    Publisher="CN=Vizbee"
+    Version="0.1.0.0"
+    ProcessorArchitecture="x64" />
+
+  <mp:PhoneIdentity PhoneProductId="3a3a3a3a-3a3a-3a3a-3a3a-3a3a3a3a3a3a" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+
+  <Properties>
+    <DisplayName>Vizbee Sample Webapp</DisplayName>
+    <PublisherDisplayName>Vizbee</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application
+        Id="VizbeeSampleApp.Xbox"
+        Executable="$targetnametoken$.exe"
+        EntryPoint="VizbeeSampleXbox.App">
+      <uap:VisualElements
+          DisplayName="Vizbee Sample Webapp"
+          Square150x150Logo="Assets\Square150x150Logo.png"
+          Square44x44Logo="Assets\Square44x44Logo.png"
+          Description="Vizbee Sample TV Webapp"
+          BackgroundColor="#0b0d10">
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0b0d10"/>
+      </uap:VisualElements>
+      <Extensions>
+        <!-- DIAL: lets a Vizbee mobile sender launch the Xbox app remotely.
+             Name MUST equal Vizbee dashboard's `dialName` for this device
+             (case-sensitive). Distinct from the dashboard's `appStoreId` —
+             that one is the AppId/AUMID for the Microsoft Store catalog
+             launch path (see <Application Id> above). -->
+        <uap:Extension Category="windows.dialProtocol">
+          <uap:DialProtocol Name="com.vizbee.sampleapp.xbox" />
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- internetClient: load the hosted web app + the Vizbee/HomeSSO SDKs.
+         internetClientServer: needed if the Vizbee SDK opens a local socket
+         for sender discovery (DIAL is server-side; SSDP/mDNS may need this). -->
+    <Capability Name="internetClient" />
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+</Package>

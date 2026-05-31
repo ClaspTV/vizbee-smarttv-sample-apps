@@ -66,10 +66,23 @@ for p in "${PLATFORMS[@]}"; do
   fi
 
   # index.html and any non-hashed top-level files must be revalidated each load.
+  #
+  # xbox guard: on the qa origin bucket the xbox *SDK* light builds share this
+  # app's prefix — s3://<bucket>/xbox/v7/, /xbox/es6/, /xbox/<version>/ — because
+  # the Vizbee SDK path segment ("xbox") happens to equal the platform name. The
+  # app bundle doesn't contain those, so a plain --delete sync would wipe them.
+  # Exclude the SDK dirs (from upload *and* delete) for xbox only. tizen/webos
+  # don't collide — their SDK lives under /samsung/, /lg/, not /tizen/, /webos/.
+  # These patterns track the SDK's path scheme (v7 live pointer, v7.x.y
+  # snapshots, es6 tree); add new majors/segments here if the scheme grows.
+  TOP_EXCLUDES=(--exclude "assets/*")
+  if [ "$p" = "xbox" ]; then
+    TOP_EXCLUDES+=(--exclude "v7/*" --exclude "v7.*" --exclude "es6/*")
+  fi
   aws s3 sync "$src/" "s3://$BUCKET/${KEYBASE}$p/" \
     --region "$REGION" \
     --delete \
-    --exclude "assets/*" \
+    "${TOP_EXCLUDES[@]}" \
     --cache-control "no-cache, must-revalidate"
 
   DEPLOYED+=("$p")
