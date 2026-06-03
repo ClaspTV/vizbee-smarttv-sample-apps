@@ -4,14 +4,15 @@ import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
+import type { VizbeeSDK } from '@vizbeetv/sdk/samsung';
 
-// vizbee.js is loaded as an external <script> in index.html and exposes
-// the global window.vizbee. No npm package; types come from the SDK guide.
+// The continuity SDK populates the global window.vizbee (whether loaded via the
+// external <script> or the @vizbeetv/sdk npm package). Its public surface is now
+// typed by the package's shipped declarations. `homesso` is a separate SDK that
+// also attaches to window.vizbee and is left loosely typed here.
 declare global {
   interface Window {
-    // SDK has no published .d.ts — narrow surface used here is described
-    // in the integration guide at developer.vizbee.tv.
-    vizbee?: any;
+    vizbee?: VizbeeSDK & { homesso?: any };
   }
 }
 
@@ -93,10 +94,11 @@ export class VizbeeService implements IVizbeeService {
       this.log.warn('SDK not available on window.vizbee; continuity disabled');
       return;
     }
+    if (!window.vizbee) return;
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.start(appId);
-      ctx.getAppAdapter().setDeeplinkHandler((info: any) => this.onDeeplink(info));
+      ctx.getAppAdapter().setDeeplinkHandler((info) => this.onDeeplink(info));
       this.log.info('continuity started', { appId });
     } catch (e) {
       this.log.error('continuity start failed', e);
@@ -183,9 +185,10 @@ export class VizbeeService implements IVizbeeService {
     this.log.debug('setVideo', { id: meta.id, title: meta.title, isLive: !!meta.isLive });
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
-      const adapter = new window.vizbee.continuity.adapters.PlayerAdapter();
-      adapter.setPlayerType(window.vizbee.continuity.adapters.PlayerType.HTML);
-      adapter.setPlayerElement(binding.videoEl);
+      const adapter = new window.vizbee.continuity.adapters.PlayerAdapter(
+        window.vizbee.continuity.adapters.PlayerType.HTML,
+        binding.videoEl,
+      );
       adapter.setPlayHandler(() => binding.onPlay());
       adapter.setPauseHandler(() => binding.onPause());
       adapter.setSeekHandler((timeMs: number) => binding.onSeek(timeMs / 1000));

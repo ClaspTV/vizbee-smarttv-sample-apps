@@ -199,6 +199,15 @@ export function renderSettingsPage(root: HTMLElement): () => void {
       if (date) ssoDd.textContent = buildSsoValue(date);
     });
   }
+  // HomeSSO account (app-owned state). Live-updates if the user signs in/out
+  // (e.g. a phone completes sign-in, or Sign out on the Profile page) while
+  // Settings is open.
+  const accountValue = (state = services().homeSSO.authState()): string =>
+    state.account ? `Signed in as ${state.account.login}` : 'Not signed in';
+  const accountDd = appendInfo(infoList, 'HomeSSO Account', accountValue());
+  const offAuth = services().homeSSO.onAuthChange((state) => {
+    accountDd.textContent = accountValue(state);
+  });
   // Which build is actually running, where it loaded from, and when it was
   // built — so "deployed one, launched another" is verifiable at a glance.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
@@ -232,7 +241,10 @@ export function renderSettingsPage(root: HTMLElement): () => void {
     if (action === 'BACK') services().router.back('/home');
   });
 
-  return () => off();
+  return () => {
+    off();
+    offAuth();
+  };
 }
 
 // The App ID is read once at boot by VizbeeService.init, so a change applies on

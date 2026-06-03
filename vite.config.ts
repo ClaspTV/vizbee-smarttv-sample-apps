@@ -51,6 +51,36 @@ function tizenWebapisScript(platform: string): Plugin {
   };
 }
 
+// Ship LG's webOSTV.js (Apache-2.0) and load it only in webOS builds. It defines
+// window.webOS.service.request (a PalmServiceBridge wrapper) — the API the Vizbee
+// SDK guards on (`if (window.webOS) webOS.service.request(...)`) to read device
+// info (model/firmware/sdkVersion via systemproperty, deviceId via sm, network
+// via connectionmanager). Without it window.webOS is undefined and the SDK skips
+// every Luna call, so the backend receives empty/unknown device values. Loaded as
+// a classic <head> script so window.webOS exists before the deferred module
+// bundle (and thus before the SDK) runs. Vendored at vendor/webOSTV.js.
+const WEBOS_TV_JS_FILENAME = 'webOSTV.js';
+function webosTvScript(platform: string): Plugin {
+  return {
+    name: 'webos-tv-script',
+    transformIndexHtml(html) {
+      if (platform !== 'webos') return html;
+      return html.replace(
+        /<head>/,
+        `<head>\n    <script src="${WEBOS_TV_JS_FILENAME}"></script>`,
+      );
+    },
+    generateBundle() {
+      if (platform !== 'webos') return;
+      this.emitFile({
+        type: 'asset',
+        fileName: WEBOS_TV_JS_FILENAME,
+        source: readFileSync(new URL('./vendor/webOSTV.js', import.meta.url), 'utf8'),
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const platform = PLATFORM_MODES.has(mode) ? mode : 'desktop';
   // For the npm builds: the name of the bundled Vizbee SDK package to import
@@ -78,7 +108,7 @@ export default defineConfig(({ mode }) => {
         ),
       },
     },
-    plugins: [vizioCompanionScript(platform), tizenWebapisScript(platform)],
+    plugins: [vizioCompanionScript(platform), tizenWebapisScript(platform), webosTvScript(platform)],
     build: {
       target: 'es2017',
       outDir: `dist/${platform}`,
@@ -87,10 +117,18 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       rollupOptions: {
         output: {
-          // Predictable filenames help platform packagers reference them.
-          entryFileNames: 'assets/[name].js',
-          chunkFileNames: 'assets/[name].js',
-          assetFileNames: 'assets/[name][extname]',
+          // Content-hashed filenames: each build emits a unique URL
+          // (index-<hash>.js). This is REQUIRED for correct caching — deploy-s3
+          // serves assets/* as `immutable, max-age=1y`, which is only safe when
+          // the name changes per build. With a fixed name (assets/index.js) the
+          // TV webview cached the bundle for a year and never picked up
+          // redeploys (version/date frozen). index.html is served no-cache and
+          // is regenerated to point at the new hash, so devices auto-refresh.
+          // Nothing references these by a fixed name (the hosted index.html is
+          // the only entry point), so hashing is safe for all platform builds.
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
         },
       },
     },

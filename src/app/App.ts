@@ -1,6 +1,7 @@
 import { Router } from './Router';
 import { renderHomePage } from '@/features/home/HomePage';
 import { renderPlayerPage } from '@/features/player/PlayerPage';
+import { renderProfilePage } from '@/features/profile/ProfilePage';
 import { renderSettingsPage } from '@/features/settings/SettingsPage';
 import { createNavMenu } from '@/components/NavMenu';
 import { services } from '@/services/ServiceContainer';
@@ -35,6 +36,7 @@ export function startApp(root: HTMLElement, router: Router): void {
   root.appendChild(layout);
 
   router.register('/home', () => renderHomePage(content));
+  router.register('/profile', () => renderProfilePage(content));
   router.register('/settings', () => renderSettingsPage(content));
   router.register('/player/:id', (params) => renderPlayerPage(content, params));
 

@@ -15,12 +15,12 @@ spatial-navigation focus model, and a stub-first seam for the Vizbee SDK.
 ```
 ┌────────┬─────────────────────────────────────────────────────────────┐
 │        │                Vizbee Sample Webapp                         │
-│  ⌂ ☰   ├─────────────────────────────────────────────────────────────┤
-│  ⚙     │   Home          Player            Settings                  │
-│        │   ────          ──────            ────────                  │
-│  Nav   │   Hero +        <video> +         Feature flags             │
-│  rail  │   carousel      overlay HUD       (localStorage + URL)      │
-│        │                 + transport       Device info               │
+│  ⌂ ☺   ├─────────────────────────────────────────────────────────────┤
+│  ⚙     │   Home      Profile      Player         Settings            │
+│        │   ────      ───────      ──────         ────────            │
+│  Nav   │   Hero +    HomeSSO      <video> +      Feature flags        │
+│  rail  │   carousel  account +    overlay HUD    (localStorage + URL) │
+│        │             sign-in      + transport    Device info          │
 │  (←  → │                                                             │
 │  to    │   ←─ persistent menu always reachable via D-pad LEFT ─→     │
 │  reach │                                                             │
@@ -170,10 +170,12 @@ src/
 │   ├── config/ConfigService.ts
 │   ├── feature-flags/{FeatureFlagService.ts, flags.ts}
 │   ├── logger/Logger.ts
-│   └── vizbee/VizbeeService.ts      # ← stub seam for the SDK
+│   ├── vizbee/VizbeeService.ts      # ← continuity SDK seam
+│   └── homesso/{HomeSSOService.ts, HomeSSOAuthStore.ts}  # ← HomeSSO + account state
 ├── features/
 │   ├── home/{HomePage.ts, home.css}
 │   ├── player/{PlayerPage.ts, player.css}
+│   ├── profile/{ProfilePage.ts, profile.css}   # ← HomeSSO account / sign-out
 │   └── settings/{SettingsPage.ts, settings.css}
 ├── components/
 │   ├── NavMenu.ts                   # ← persistent left-rail menu
@@ -240,6 +242,34 @@ Settings → "Vizbee SDK Env"    # radio: Dev/QA/Prod origin (reloads to apply)
 The choice persists in `localStorage`; since the SDK script loads once at launch,
 changing it prompts a reload. Full reference (URLs per platform/variant, code
 map): [docs/vizbee-sdk.md](docs/vizbee-sdk.md).
+
+## HomeSSO sign-in & Profile
+
+The app loads the HomeSSO SDK (`@vizbeetv/homesso-sdk`) alongside the continuity
+SDK and wires the **real** mobile-to-TV sign-in flow: it registers a sign-in-info
+getter and a request handler and connects the continuity session
+(`manager.init()`). When a paired phone pushes a sign-in, the handler runs the
+Vizbee HomeSSO **device-code** flow against `homesso.vizbee.tv` (issue reg code →
+relay to phone via the progress toast → poll until `status:'done'`), the same
+contract the Roku sample uses.
+
+The HomeSSO SDK owns the toasts and the mobile messaging but **not** the account —
+so the app owns it ([`HomeSSOAuthStore`](src/services/homesso/HomeSSOAuthStore.ts),
+persisted to `localStorage`). The **Profile** page (`/profile`, in the nav rail)
+renders that account, shows the in-flight reg code, and offers **Sign out** (which
+also calls `/v1/signout`).
+
+```
+Settings → "HomeSSO modal preview"   # fire the 3 toasts with dummy data (styling)
+Profile                              # account state + live reg code during sign-in
+Profile  → "Sign out"                # clear the account + POST /v1/signout
+```
+
+`manager.init()` needs `window.vizbee.continuity`, so the handler only fires on a
+TV with a paired sender (sign-in is phone-driven — no on-TV button); on desktop
+there's no sign-in path. The backend calls require `homesso.vizbee.tv` to permit
+the app origin (CORS). Full reference + endpoint table:
+[docs/features.md → HomeSSO sign-in](docs/features.md#homesso-sign-in).
 
 ## License
 

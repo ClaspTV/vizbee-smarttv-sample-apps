@@ -10,6 +10,7 @@ import './styles/layout.css';
 import './components/components.css';
 import './features/home/home.css';
 import './features/player/player.css';
+import './features/profile/profile.css';
 import './features/settings/settings.css';
 
 import { PlatformFactory } from './core/platform/PlatformFactory';

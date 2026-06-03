@@ -168,9 +168,21 @@ older webOS 4 engines. URLs and switching details:
 
 - webOS 3 ships Chromium 38 — many ES2017+ features fail. The sample
   targets ES2017 (webOS 4+); for older devices, add `@vitejs/plugin-legacy`.
-- `webOSTV.js` and `webOSTV-dev.js` libraries provide deeper services
-  (luna calls, media playback). Not needed for the sample, but if you
-  add them, load *before* depending on `window.webOS`.
+- **`webOSTV.js` is required for device info.** LG's `webOSTV.js` (vendored at
+  [`vendor/webOSTV.js`](../vendor/webOSTV.js), Apache-2.0) defines
+  `window.webOS.service.request` — the `PalmServiceBridge` wrapper the Vizbee SDK
+  guards on (`if (window.webOS) webOS.service.request(...)`) to read model /
+  firmware / sdkVersion (`com.webos.service.tv.systemproperty`), the device id
+  (`com.webos.service.sm` `deviceid/getIDs`), and network (`connectionmanager`).
+  Without it `window.webOS` is undefined and the SDK **silently skips every Luna
+  call**, so the metrics backend gets empty/unknown values. The webOS build
+  injects it as a classic `<head>` script via a Vite plugin (see
+  [`vite.config.ts`](../vite.config.ts) → `webosTvScript`) so it runs *before* the
+  module bundle. `webOSTV-dev.js` additionally enables on-device debugging.
+- The **device id** (`com.webos.service.sm` `deviceid/getIDs`, type `LGUDID`) may
+  still return empty on a **dev-mode sideloaded** app — full access is granted to
+  apps published / allowlisted through the LG Content Store. Model, firmware,
+  sdkVersion and network info populate regardless once `webOSTV.js` is present.
 
 ---
 
