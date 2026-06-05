@@ -111,7 +111,8 @@ export class VizbeeService implements IVizbeeService {
   // Tizen/webOS/Xbox expose all four variants in Settings; Vizio ships a single
   // monolithic build, and desktop has none (App.ts gates init off → undefined).
   private resolveSdkUrl(platform: PlatformName): string | undefined {
-    const origin = sdkOrigin(services().flags.get('sdkEnv'));
+    const env = services().flags.get('sdkEnv');
+    const origin = sdkOrigin(env);
 
     // Vizio: single monolithic build at the env origin root (no full/light).
     if (platform === 'viziosmartcast') return `${origin}/v7/vizbee.js`;
@@ -123,8 +124,13 @@ export class VizbeeService implements IVizbeeService {
     // full = the monolithic SDK at the origin root (one file serves ES5 + ES6).
     if (variant.startsWith('full')) return `${origin}/v7/vizbee.js`;
     // light = the per-target build under /<segment>/; ES6 adds an /es6/ segment.
+    // DEV serves the newer "directsync" light builds under an extra /sdk/
+    // segment (…/sdk/lg/v7/…); qa/prod don't have that path (they 403/404), so
+    // the prefix is dev-only. Switch env to Dev in Settings (or ?ff_sdkEnv=dev)
+    // to load it.
+    const devPrefix = env === 'dev' ? 'sdk/' : '';
     const es6 = variant.endsWith('es6') ? 'es6/' : '';
-    return `${origin}/${segment}/${es6}v7/vizbee.js`;
+    return `${origin}/${devPrefix}${segment}/${es6}v7/vizbee.js`;
   }
 
   private onDeeplink(videoInfo: any): void {

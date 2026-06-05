@@ -277,7 +277,6 @@ One file, three lines:
 // src/services/feature-flags/flags.ts
 export interface FeatureFlags {
   debugMode: boolean;
-  syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   videoPlayer: 'html';
   myNewFlag: boolean;             // ← add
@@ -306,7 +305,6 @@ group, and its URL overrides are validated against those values.
 
 | Flag | Type / default | Effect |
 |---|---|---|
-| `syncConnection` | `pubnub` \| `local` · `pubnub` | Continuity transport choice. Surfaced in Settings; reserved — not yet consumed by the SDK seam. |
 | `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. **Build-aware "Vizbee SDK" row:** these options show on the **script** build; on the **npm** build the row shows `npmModule` (ES5/ES6) instead. See [vizbee-sdk.md](vizbee-sdk.md). |
 | `videoPlayer` | `html` · `html` | Player implementation. Single HTML `<video>` option today; reserved for adding alternatives. |
 | `appBuild` | `script` \| `npm` · `script` | Which hosted app build to run — `script` (external-`<script>` SDK, `…/webos/`) vs `npm` (node_modules-bundled SDK, `…/webos-with-nodemodule/<module>/`). Selecting it reloads into that build's URL on webOS/Tizen (same origin, so the flag carries over). No-op on desktop/dev. See [`appBuild.ts`](../src/core/platform/appBuild.ts). |

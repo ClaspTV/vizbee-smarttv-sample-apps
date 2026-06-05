@@ -3,7 +3,6 @@
 // adapts automatically.
 
 export interface FeatureFlags {
-  syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   // Which environment's origin the SDK <script> loads from (orthogonal to the
   // full/light × ES5/ES6 variant — it only swaps the host). dev/qa = the S3
@@ -37,7 +36,6 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   appBuild: 'script',
   vizbeeSdk: 'light-es5',
   sdkEnv: 'prod',
-  syncConnection: 'pubnub',
   videoPlayer: 'html',
   npmModule: 'es5',
   homeSSOStyle: 'dazn',
@@ -51,7 +49,6 @@ export type FlagKey = keyof FeatureFlags;
 export type FlagValue = string | boolean;
 
 export const FLAG_LABELS: Record<FlagKey, string> = {
-  syncConnection: 'Sync Connection',
   vizbeeSdk: 'Vizbee SDK',
   sdkEnv: 'Vizbee SDK Env',
   videoPlayer: 'Video Player',
@@ -64,10 +61,6 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
 // Labels for the options of each enum-typed flag. Boolean flags don't appear
 // here — they render as a Toggle. Keys present here render as a RadioGroup.
 export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string; label: string }>>> = {
-  syncConnection: [
-    { value: 'pubnub', label: 'Use PubNub' },
-    { value: 'local', label: 'Use Local Communication' },
-  ],
   vizbeeSdk: [
     { value: 'full-es5', label: 'Use Full Vizbee SDK - ES5' },
     { value: 'full-es6', label: 'Use Full Vizbee SDK - ES6' },
