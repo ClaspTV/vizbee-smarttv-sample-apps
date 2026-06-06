@@ -98,3 +98,82 @@
   font-weight: var(--font-weight-medium);
   word-break: break-word;
 }
+
+/* --- Reload banner --------------------------------------------------------
+ * Appears (slides down) once any reload-requiring flag is changed.
+ * Stays visible for the session — changes can only be applied by reloading.
+ * display:none keeps it out of spatial focus until it's needed.
+ */
+.settings-reload-banner {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--color-bg-2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+}
+
+.settings-reload-banner--visible {
+  display: flex;
+  animation: banner-slide-in var(--transition-med) both;
+}
+
+@keyframes banner-slide-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.settings-reload-banner__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-reload-banner__icon {
+  flex: 0 0 auto;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.settings-reload-banner__text {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-warning);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-reload-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: #07090c;
+  background: var(--color-warning);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    transform var(--transition-med),
+    box-shadow var(--transition-med);
+}
+
+.settings-reload-btn.is-focused {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 var(--focus-ring-width) var(--color-warning),
+    0 0 48px 0 rgba(251, 191, 36, 0.5);
+}

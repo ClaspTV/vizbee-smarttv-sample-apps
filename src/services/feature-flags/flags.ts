@@ -4,6 +4,10 @@
 
 export interface FeatureFlags {
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
+  // Whether the Vizbee SDK receives a <video> element ('element') or operates
+  // in element-less mode ('elementless') where state is polled via getVideoInfo().
+  // Elementless uses dedicated dev-origin SDK builds (samsung-el/lg-el/xbox-el).
+  playerElement: 'element' | 'elementless';
   // Which environment's origin the SDK <script> loads from (orthogonal to the
   // full/light × ES5/ES6 variant — it only swaps the host). dev/qa = the S3
   // origin buckets, prod = the public CDN. See services/sdkEnv.ts. Applies to
@@ -40,6 +44,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   npmModule: 'es5',
   homeSSOStyle: 'dazn',
   homeSSOLocale: 'default',
+  playerElement: 'element',
 };
 
 export type FlagKey = keyof FeatureFlags;
@@ -56,6 +61,7 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
   npmModule: 'NPM SDK Module',
   homeSSOStyle: 'HomeSSO Modal Style',
   homeSSOLocale: 'Localization',
+  playerElement: 'Player Element',
 };
 
 // Labels for the options of each enum-typed flag. Boolean flags don't appear
@@ -90,5 +96,9 @@ export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string
   homeSSOLocale: [
     { value: 'default', label: 'Use Default' },
     { value: 'rtl', label: 'Use RTL (Arabic)' },
+  ],
+  playerElement: [
+    { value: 'element', label: 'Use player element' },
+    { value: 'elementless', label: 'Do not use player element' },
   ],
 };

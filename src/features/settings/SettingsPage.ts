@@ -2,9 +2,15 @@ import { createToggle } from '@/components/Toggle';
 import { createRadioGroup, firstFocusableOption } from '@/components/RadioGroup';
 import { createTextField } from '@/components/TextField';
 import { showConfirmDialog } from '@/components/ConfirmDialog';
+import { createFocusableButton } from '@/components/FocusableButton';
 import { buildLabel, currentBuild, targetUrl } from '@/core/platform/appBuild';
 import { services } from '@/services/ServiceContainer';
 import { DEFAULT_FLAGS, FLAG_LABELS, FLAG_OPTIONS, FlagKey } from '@/services/feature-flags/flags';
+
+// Flags whose change requires an in-place reload (they affect the SDK <script>
+// URL, which is injected once at boot). appBuild / npmModule are URL redirects
+// to separate hosted apps — those keep their own prompts.
+const RELOAD_FLAGS: ReadonlySet<FlagKey> = new Set<FlagKey>(['vizbeeSdk', 'sdkEnv', 'playerElement']);
 
 export function renderSettingsPage(root: HTMLElement): () => void {
   root.innerHTML = '';
@@ -23,6 +29,44 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   subtitle.textContent = 'Toggle features for this device. Changes are saved instantly.';
   header.appendChild(title);
   header.appendChild(subtitle);
+
+  // --- Reload banner -------------------------------------------------------
+  // Shows once any reload-requiring flag has changed. Developer can switch as
+  // many flags as they need, then hit this once for a single reload.
+  const pendingReloads = new Set<string>();
+
+  const reloadBanner = document.createElement('div');
+  reloadBanner.className = 'settings-reload-banner';
+
+  const bannerLeft = document.createElement('div');
+  bannerLeft.className = 'settings-reload-banner__left';
+
+  const bannerIcon = document.createElement('span');
+  bannerIcon.className = 'settings-reload-banner__icon';
+  bannerIcon.textContent = '⚠';
+
+  const bannerText = document.createElement('span');
+  bannerText.className = 'settings-reload-banner__text';
+
+  const reloadBtn = createFocusableButton({
+    label: 'Reload now  →',
+    className: 'settings-reload-btn',
+    onActivate: () => window.location.reload(),
+  });
+
+  bannerLeft.appendChild(bannerIcon);
+  bannerLeft.appendChild(bannerText);
+  reloadBanner.appendChild(bannerLeft);
+  reloadBanner.appendChild(reloadBtn);
+
+  const markPending = (key: string): void => {
+    pendingReloads.add(key);
+    const labels = [...pendingReloads].map((k) =>
+      k === 'appId' ? 'App ID' : (FLAG_LABELS[k as FlagKey] ?? k),
+    );
+    bannerText.textContent = `${labels.join(' · ')} changed — reload to apply`;
+    reloadBanner.classList.add('settings-reload-banner--visible');
+  };
 
   // Section: Feature flags
   const section = document.createElement('section');
@@ -47,7 +91,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
     value: services().config.get().vizbeeAppId,
     onCommit: (value) => {
       services().config.setVizbeeAppId(value);
-      promptAppIdReload();
+      markPending('appId');
     },
   });
   list.appendChild(appIdField);
@@ -75,8 +119,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
         // Cast: set's overload narrows per key, but the loop's K is widened.
         onChange: (value) => {
           flags.set(optionsKey, value as never);
-          if (optionsKey === 'vizbeeSdk') promptSdkReload('vizbeeSdk', value);
-          else if (optionsKey === 'sdkEnv') promptSdkReload('sdkEnv', value);
+          if (RELOAD_FLAGS.has(optionsKey)) markPending(optionsKey);
           else if (optionsKey === 'npmModule') promptModuleSwitch(value);
           else if (optionsKey === 'appBuild') promptBuildSwitch(value);
         },
@@ -230,6 +273,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   body.appendChild(infoSection);
 
   page.appendChild(header);
+  page.appendChild(reloadBanner);
   page.appendChild(body);
   root.appendChild(page);
 
@@ -245,34 +289,6 @@ export function renderSettingsPage(root: HTMLElement): () => void {
     off();
     offAuth();
   };
-}
-
-// The App ID is read once at boot by VizbeeService.init, so a change applies on
-// the next load. Offer an immediate reload; "Later" keeps it for next launch.
-function promptAppIdReload(): void {
-  showConfirmDialog({
-    title: 'Apply Vizbee App ID?',
-    message: 'The app will reload to start with the new App ID.',
-    confirmLabel: 'Reload now',
-    cancelLabel: 'Later',
-    onConfirm: () => window.location.reload(),
-  });
-}
-
-// The Vizbee SDK <script> is injected once at boot, so switching the build
-// (vizbeeSdk) or its origin env (sdkEnv) only takes effect on a fresh load.
-// Offer an immediate reload to apply the picked value now; "Later" keeps the
-// selection (persisted) for the next launch.
-function promptSdkReload(key: 'vizbeeSdk' | 'sdkEnv', value: string): void {
-  const label = (FLAG_OPTIONS[key]?.find((o) => o.value === value)?.label ?? '')
-    .replace(/^Use\s+/, '') || 'The selected SDK';
-  showConfirmDialog({
-    title: 'Reload to apply SDK?',
-    message: `Switching to "${label}" takes effect after a reload. Reload now?`,
-    confirmLabel: 'Reload now',
-    cancelLabel: 'Later',
-    onConfirm: () => window.location.reload(),
-  });
 }
 
 // The script and npm builds are separate apps at different hosted URLs, so
