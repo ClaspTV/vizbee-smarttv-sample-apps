@@ -4,17 +4,11 @@ import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
-import type { VizbeeSDK } from '@vizbeetv/sdk/samsung';
-
-// The continuity SDK populates the global window.vizbee (whether loaded via the
-// external <script> or the @vizbeetv/sdk npm package). Its public surface is now
-// typed by the package's shipped declarations. `homesso` is a separate SDK that
-// also attaches to window.vizbee and is left loosely typed here.
-declare global {
-  interface Window {
-    vizbee?: VizbeeSDK & { homesso?: any };
-  }
-}
+// window.vizbee is typed by @vizbeetv/sdk-qa/samsung (global Window augmentation
+// in samsung.d.ts). The homesso namespace is bridged in via the VizbeeSDK module
+// augmentation in src/types/global.d.ts — both continuity and homesso are
+// accessible on window.vizbee without casts.
+import '@vizbeetv/sdk-qa/samsung';
 
 export interface VizbeeVideoMeta {
   id: string;
@@ -220,30 +214,49 @@ export class VizbeeService implements IVizbeeService {
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
 
-      // Clear any previous VideoInfo (title, image, etc.) before registering
-      // the new video. Without this, old metadata lingers during the new
-      // video's loading/buffering phase and the sender shows stale info.
-      try { ctx.stopVideo(); } catch (_) {}
+      // Remove the previous adapter (if any) before registering the new video.
+      // This clears old metadata so the sender doesn't see stale title/image
+      // during the new video's loading/buffering phase.
+      if (this.currentAdapter) {
+        try { ctx.removePlayerAdapter(this.currentAdapter); } catch (_) {}
+        this.currentAdapter = null;
+      }
 
-      const { PlayerAdapter, PlayerType } = window.vizbee.continuity.adapters;
+      // Adapters map differs between SDK versions. HTMLPlayerAdapter presence is
+      // the discriminator — it only exists in the new API:
+      //
+      //   old SDK:  PlayerAdapter('html')           |  PlayerAdapter('html', element)
+      //   new SDK:  PlayerAdapter()                 |  HTMLPlayerAdapter(element)
+      //
+      // Both old and new SDKs use PlayerAdapter for elementless — the SDK's
+      // _isValidPlayerAdapter check is instanceof PlayerAdapter, so BasePlayerAdapter
+      // (old SDK type) must never be used; it does not pass that check.
+      const adapters = window.vizbee.continuity.adapters as any;
+      const { PlayerAdapter } = window.vizbee.continuity.adapters;
+      const isNewSdkApi = !!adapters.HTMLPlayerAdapter;
 
       let adapter: any;
       if (isElementless) {
         // Element-less mode: no media element passed to the adapter.
         // PlayerPage drives all state via notifyPlayerState(); the poller only
         // reads position + duration from this getter.
-        adapter = new (PlayerAdapter as any)(PlayerType.HTML);
+        adapter = isNewSdkApi
+          ? new PlayerAdapter()
+          : new (PlayerAdapter as any)('html');
         adapter.setVideoInfoGetter(() => {
           const el = binding.videoEl;
-          const s = new (window.vizbee!.continuity.messages as any).VideoStatus();
+          const s = new window.vizbee!.continuity.messages.VideoStatus();
           s.guid = sdkGuid;
           s.currentPosition = (el.currentTime || 0) * 1000;
           s.duration = (el.duration || 0) * 1000;
           s.isLive = !!meta.isLive;
+          s.state = el.paused ? 'paused' : 'playing';
           return s;
         });
       } else {
-        adapter = new PlayerAdapter(PlayerType.HTML, binding.videoEl);
+        adapter = isNewSdkApi
+          ? new adapters.HTMLPlayerAdapter(binding.videoEl)
+          : new (PlayerAdapter as any)('html', binding.videoEl);
       }
 
       adapter.setPlayHandler(() => {
@@ -303,13 +316,12 @@ export class VizbeeService implements IVizbeeService {
       if (isElementless && this.currentAdapter) {
         // Push INTERRUPTED immediately via the new push API, then clean up.
         // No timeout needed — removePlayerAdapter() also auto-signals INTERRUPTED.
-        const PlayerState = (window.vizbee.continuity.messages as any).PlayerState;
+        const { PlayerState } = window.vizbee.continuity.messages;
         const adapter = this.currentAdapter;
         this.currentAdapter = null;
         try {
           (ctx as any).notifyPlayerState(PlayerState.INTERRUPTED);
           this.log.info('elementless: notified INTERRUPTED');
-          ctx.stopVideo();
           ctx.removePlayerAdapter(adapter);
         } catch (e) {
           this.log.error('elementless: stop failed', e);
@@ -317,7 +329,6 @@ export class VizbeeService implements IVizbeeService {
         return;
       }
 
-      ctx.stopVideo();
       if (this.currentAdapter) {
         ctx.removePlayerAdapter(this.currentAdapter);
         this.currentAdapter = null;
@@ -368,8 +379,6 @@ const SDK_LIGHT_SEGMENT: Partial<Record<PlatformName, string>> = {
   xbox: 'xbox',
 };
 
-// Element-less SDK builds are currently only available on the dev S3 origin.
-// These URLs are used for all environments when `playerElement` is 'elementless'.
 // Element-less SDK builds — dev origin only. ES variant mirrors the vizbeeSdk flag.
 const SDK_ELEMENTLESS_URL: Record<'es5' | 'es6', Partial<Record<PlatformName, string>>> = {
   es5: {
@@ -390,28 +399,28 @@ const SDK_ELEMENTLESS_URL: Record<'es5' | 'es6', Partial<Record<PlatformName, st
 // constant is empty (script builds). Each package is a side-effect module that
 // populates window.vizbee. Add a branch per package as more ship.
 async function loadBundledSdk(): Promise<boolean> {
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung') {
-    await import('@vizbeetv/sdk/samsung');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung') {
+    await import('@vizbeetv/sdk-qa/samsung');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung/es6') {
-    await import('@vizbeetv/sdk/samsung/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung/es6') {
+    await import('@vizbeetv/sdk-qa/samsung/es6');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg') {
-    await import('@vizbeetv/sdk/lg');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg') {
+    await import('@vizbeetv/sdk-qa/lg');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg/es6') {
-    await import('@vizbeetv/sdk/lg/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg/es6') {
+    await import('@vizbeetv/sdk-qa/lg/es6');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox') {
-    await import('@vizbeetv/sdk/xbox');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox') {
+    await import('@vizbeetv/sdk-qa/xbox');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox/es6') {
-    await import('@vizbeetv/sdk/xbox/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox/es6') {
+    await import('@vizbeetv/sdk-qa/xbox/es6');
     return true;
   }
   return false;

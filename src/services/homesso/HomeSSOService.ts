@@ -74,12 +74,12 @@ const DAZN_STYLE = {
   borderRadius: '16px',
 };
 const DEFAULT_STYLE = {
-  borderColor: null,
-  borderWidth: null,
-  boxShadow: null,
-  padding: null,
-  edgeMargin: null,
-  borderRadius: null,
+  borderColor: undefined,
+  borderWidth: undefined,
+  boxShadow: undefined,
+  padding: undefined,
+  edgeMargin: undefined,
+  borderRadius: undefined,
 };
 
 // Per-modal preview strings (the `homeSSOLocale` flag). The SDK's localization
@@ -485,8 +485,9 @@ export class HomeSSOService {
     // onProgress/onSuccess/onFailure first call vizbeeMessagingClient.send() to
     // notify the mobile sender — which throws with no paired phone. Inject a
     // no-op client once so the code reaches the toast-rendering step.
+    // Cast to any because vizbeeMessagingClient is private in the SDK class.
     if (!this.shimmed) {
-      m.vizbeeMessagingClient = m.vizbeeMessagingClient ?? { send: () => {}, addReceiver: () => {} };
+      (m as any).vizbeeMessagingClient = (m as any).vizbeeMessagingClient ?? { send: () => {}, addReceiver: () => {} };
       this.shimmed = true;
     }
     return m;
