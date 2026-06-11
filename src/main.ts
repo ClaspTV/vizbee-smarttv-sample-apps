@@ -10,6 +10,7 @@ import './styles/layout.css';
 import './components/components.css';
 import './features/home/home.css';
 import './features/player/player.css';
+import './features/profile/profile.css';
 import './features/settings/settings.css';
 
 import { PlatformFactory } from './core/platform/PlatformFactory';
@@ -41,10 +42,8 @@ async function boot(): Promise<void> {
   const flags = new FeatureFlagService();
   flags.load();
 
-  // Debug/remote logging is disabled for now. The plumbing (DebugOverlay,
-  // PubNubLogger, Logger sinks, log.debug traces) is kept for a future secure
-  // re-enable; logs stay at 'info' so the verbose debug traces don't print.
-  setLogLevel('info');
+  // Sample app: log everything — all debug traces are useful for integration work.
+  setLogLevel('debug');
 
   // If a different app build (script vs npm) is selected, hop to its hosted URL
   // before doing any further work. webOS/Tizen only; same CloudFront origin, so

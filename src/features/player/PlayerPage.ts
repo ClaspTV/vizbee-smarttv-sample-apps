@@ -153,6 +153,29 @@ export function renderPlayerPage(
   const onEnded = (): void => exitPlayer();
   videoEl.addEventListener('ended', onEnded);
 
+  // Push player state to the Vizbee SDK. notifyPlayerState() is a no-op in
+  // element mode — only active in elementless mode where the SDK has no media
+  // element to read from. This mirrors what real host apps do: call from their
+  // own player callbacks rather than relying on event listener wiring in the SDK.
+  const vzb = services().vizbee;
+  const onVzbLoadStart    = (): void => vzb.notifyPlayerState('loading');
+  const onVzbLoadedMeta   = (): void => vzb.notifyPlayerState('started');
+  const onVzbPlaying      = (): void => vzb.notifyPlayerState('playing');
+  const onVzbPause        = (): void => { if (!videoEl.ended) vzb.notifyPlayerState('paused'); };
+  const onVzbEnded        = (): void => vzb.notifyPlayerState('ended');
+  const onVzbWaiting      = (): void => vzb.notifyPlayerState('buffering');
+  const onVzbError        = (): void => vzb.notifyPlayerState('error');
+  videoEl.addEventListener('loadstart',      onVzbLoadStart);
+  videoEl.addEventListener('loadedmetadata', onVzbLoadedMeta);
+  videoEl.addEventListener('playing',        onVzbPlaying);
+  videoEl.addEventListener('pause',          onVzbPause);
+  videoEl.addEventListener('ended',          onVzbEnded);
+  videoEl.addEventListener('waiting',        onVzbWaiting);
+  videoEl.addEventListener('error',          onVzbError);
+  // loadstart fires when src is set — before setVideo() is called — so push
+  // the initial state now that VideoInfo is registered with the SDK.
+  vzb.notifyPlayerState('loading');
+
   // Auto-hide overlay after a few seconds of no input.
   let hideTimer: number | undefined;
   const showOverlay = (): void => {
@@ -224,6 +247,13 @@ export function renderPlayerPage(
     videoEl.removeEventListener('play', syncPlayLabel);
     videoEl.removeEventListener('pause', syncPlayLabel);
     videoEl.removeEventListener('ended', onEnded);
+    videoEl.removeEventListener('loadstart',      onVzbLoadStart);
+    videoEl.removeEventListener('loadedmetadata', onVzbLoadedMeta);
+    videoEl.removeEventListener('playing',        onVzbPlaying);
+    videoEl.removeEventListener('pause',          onVzbPause);
+    videoEl.removeEventListener('ended',          onVzbEnded);
+    videoEl.removeEventListener('waiting',        onVzbWaiting);
+    videoEl.removeEventListener('error',          onVzbError);
     detachSource();
     videoEl.removeAttribute('src');
     videoEl.load();

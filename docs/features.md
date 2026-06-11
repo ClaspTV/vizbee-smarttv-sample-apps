@@ -11,6 +11,7 @@ expands (260px) when any of its items receives focus.
 │   VSW    │                                  │   VSW            │
 │          │                                  │                  │
 │   ⌂      │     ←  collapsed (default)       │   ⌂  Home        │   ← expanded (focused)
+│   ☺      │                                  │   ☺  Profile     │
 │   ⚙      │                                  │   ⚙  Settings    │
 │          │                                  │                  │
 └──────────┘                                  └──────────────────┘
@@ -138,6 +139,95 @@ The Player calls `vizbee.setVideo({...})` on entry and
 - Device-info pulls live from the active platform adapter
   (`platform.getDeviceInfo()`).
 
+### Profile (`/profile`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Profile                                                    │
+│  ───────                                                    │
+│  Your HomeSSO sign-in for this device.                      │
+│                                                             │
+│   ╭─────╮   Demo User                                       │
+│   │  D  │   demo@vizbee.tv                                  │
+│   ╰─────╯   Signed in via email                             │
+│                                                             │
+│   [ Sign out ]                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Shows the **HomeSSO account** for the device and offers **Sign out**. When
+signed out it explains the mobile sign-in flow; while a sign-in is in flight it
+displays the **reg code** the user enters on their phone. Sign-in itself is
+driven entirely from the phone — there is no on-TV sign-in button.
+
+The page subscribes to `HomeSSOService.onAuthChange` and rebuilds in place, so it
+reflects sign-in / sign-out live. See the HomeSSO sign-in flow below.
+Implementation: [`src/features/profile/ProfilePage.ts`](../src/features/profile/ProfilePage.ts).
+
+## HomeSSO sign-in
+
+[`src/services/homesso/`](../src/services/homesso/)
+
+HomeSSO lets a user who is signed in on their **phone** push that sign-in to the
+**TV** over the Vizbee continuity session — no on-TV keyboard entry. The SDK
+(`@vizbeetv/homesso-sdk`, loaded as a `<script>` alongside the continuity SDK)
+owns the **toasts** and the **mobile messaging**; the **app owns the account**.
+
+### What the SDK gives you vs. what the app owns
+
+The SDK has **no** current-user store, state events, or sign-out. It only:
+
+1. **pulls** the device's current sign-in state — `setSignInInfoGetter(async () => VizbeeSignInInfo[])`,
+2. **delegates** an incoming mobile sign-in request — `setSignInHandler((signInInfo, statusCallback) => …)`,
+3. **renders** the informational / progress / success toasts as you report status,
+4. connects to the continuity session on `manager.init()`.
+
+So the app supplies the missing half — an **app-owned account store**
+([`HomeSSOAuthStore`](../src/services/homesso/HomeSSOAuthStore.ts)): it persists
+who's signed in (localStorage `vsw.homesso.account.v1`), feeds the info getter,
+and notifies the Profile page on change.
+
+### Flow
+
+The handler runs the Vizbee HomeSSO **device-code** flow against
+`homesso.vizbee.tv` — the same contract as the Roku sample's
+`VizbeeHomeSSOSignInAdapter`:
+
+```
+mobile sends sign-in  ──▶  setSignInHandler(info, statusCallback)
+        │
+        │  POST /v1/accountregcode { deviceId } → { code }
+        ▼
+  statusCallback(ProgressStatus(type, { regcode: code }))  ──▶ progress toast + Profile reg code
+        │                                                       (code relayed to the phone)
+        │  POST /v1/accountregcode/poll { deviceId, regCode }  every 2s, up to 90s
+        │      → { status: 'done', authToken, email }
+        ▼
+  AuthStore.signedIn({ login: email, authToken })  ──▶ Profile flips to signed-in
+  statusCallback(SuccessStatus(type, email, { email }))  ──▶ success toast
+```
+
+| Call | Method · path | Body | Response |
+|---|---|---|---|
+| Reg code | `POST /v1/accountregcode` | `{ deviceId }` | `{ code }` |
+| Poll | `POST /v1/accountregcode/poll` | `{ deviceId, regCode }` | `{ status, authToken, email }` (`status:'done'` = complete) |
+| Sign-out | `POST /v1/signout` | `{}` + `Authorization: <authToken>` | (ignored) |
+
+`deviceId` is a stable per-install id (`<platform>:<uuid>`, persisted in
+`localStorage`), prefixed like Roku's `roku:<channelClientId>`. The poll loop runs
+every 2s for up to 90s; a newer request or sign-out supersedes an in-flight poll
+(generation counter). Sign-out drops local state and calls `/v1/signout` with the
+stored `authToken`.
+
+`manager.init()` connects to the continuity session and **throws without**
+`window.vizbee.continuity` — so the handler only fires on a TV platform with a
+**paired mobile sender**. `HomeSSOService` wires it only when continuity is
+present; on desktop it logs "preview only" (no sign-in path). Backend calls also
+require `homesso.vizbee.tv` to permit the app origin (CORS).
+
+The **Settings → "HomeSSO modal preview"** toggles are separate — they fire the
+SDK's three toasts with dummy data for styling work and don't touch the account.
+
 ## Feature flags
 
 [`src/services/feature-flags/`](../src/services/feature-flags/)
@@ -187,7 +277,6 @@ One file, three lines:
 // src/services/feature-flags/flags.ts
 export interface FeatureFlags {
   debugMode: boolean;
-  syncConnection: 'pubnub' | 'local';
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
   videoPlayer: 'html';
   myNewFlag: boolean;             // ← add
@@ -216,7 +305,6 @@ group, and its URL overrides are validated against those values.
 
 | Flag | Type / default | Effect |
 |---|---|---|
-| `syncConnection` | `pubnub` \| `local` · `pubnub` | Continuity transport choice. Surfaced in Settings; reserved — not yet consumed by the SDK seam. |
 | `vizbeeSdk` | `full-es5` \| `full-es6` \| `light-es5` \| `light-es6` · `light-es5` | Which Vizbee SDK build loads (full/light × ES5/ES6, Tizen & webOS). Wired in `VizbeeService`; changing it prompts a reload. **Build-aware "Vizbee SDK" row:** these options show on the **script** build; on the **npm** build the row shows `npmModule` (ES5/ES6) instead. See [vizbee-sdk.md](vizbee-sdk.md). |
 | `videoPlayer` | `html` · `html` | Player implementation. Single HTML `<video>` option today; reserved for adding alternatives. |
 | `appBuild` | `script` \| `npm` · `script` | Which hosted app build to run — `script` (external-`<script>` SDK, `…/webos/`) vs `npm` (node_modules-bundled SDK, `…/webos-with-nodemodule/<module>/`). Selecting it reloads into that build's URL on webOS/Tizen (same origin, so the flag carries over). No-op on desktop/dev. See [`appBuild.ts`](../src/core/platform/appBuild.ts). |

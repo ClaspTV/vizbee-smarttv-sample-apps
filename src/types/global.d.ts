@@ -53,4 +53,17 @@ declare global {
   const __APP_VERSION__: string;
 }
 
+// Bridge the HomeSSO SDK namespace into the continuity SDK's window.vizbee type.
+// The two SDKs use separate global declarations: the continuity SDK adds
+// window.vizbee: VizbeeSDK (via import '@vizbeetv/sdk-qa/samsung') while the
+// HomeSSO SDK adds window.vizbee.homesso via its own VizbeeNamespace interface.
+// Augmenting VizbeeSDK here merges both into the same window.vizbee type so
+// both continuity and homesso properties are accessible without casts.
+import type { HomeSSONamespace } from '@vizbeetv/homesso-sdk-qa';
+declare module '@vizbeetv/sdk-qa' {
+  interface VizbeeSDK {
+    homesso?: HomeSSONamespace;
+  }
+}
+
 export {};

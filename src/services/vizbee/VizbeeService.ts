@@ -4,16 +4,11 @@ import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
-
-// vizbee.js is loaded as an external <script> in index.html and exposes
-// the global window.vizbee. No npm package; types come from the SDK guide.
-declare global {
-  interface Window {
-    // SDK has no published .d.ts — narrow surface used here is described
-    // in the integration guide at developer.vizbee.tv.
-    vizbee?: any;
-  }
-}
+// window.vizbee is typed by @vizbeetv/sdk-qa/samsung (global Window augmentation
+// in samsung.d.ts). The homesso namespace is bridged in via the VizbeeSDK module
+// augmentation in src/types/global.d.ts — both continuity and homesso are
+// accessible on window.vizbee without casts.
+import '@vizbeetv/sdk-qa/samsung';
 
 export interface VizbeeVideoMeta {
   id: string;
@@ -36,6 +31,11 @@ export interface IVizbeeService {
   init(appId: string): void;
   setVideo(meta: VizbeeVideoMeta, binding: VizbeePlayerBinding): void;
   setVideoStop(): void;
+  // Push a player state change to the SDK immediately (elementless mode only;
+  // no-op in element mode where the SDK reads state from the media element).
+  // Use the PlayerState string values: 'loading', 'started', 'playing',
+  // 'paused', 'buffering', 'ended', 'interrupted', 'error'.
+  notifyPlayerState(state: string): void;
   reset(): void;
 }
 
@@ -43,6 +43,9 @@ export class VizbeeService implements IVizbeeService {
   private readonly log = new Logger('VizbeeService');
   private initialized = false;
   private currentAdapter: any = null;
+  // Maps video.id → original SDK guid as sent by the mobile, so setVideo can
+  // echo back the exact guid the sender used rather than reconstructing it.
+  private readonly deeplinkGuidMap = new Map<string, string>();
   // The SDK <script> URL actually loaded (script builds only; null for npm /
   // bundled builds, where the SDK has no S3 URL to date-stamp).
   private loadedSdkUrl: string | null = null;
@@ -80,6 +83,8 @@ export class VizbeeService implements IVizbeeService {
           this.log.info('no Vizbee SDK URL for platform; continuity disabled', { platform });
           return;
         }
+        const isElementless = services().flags.get('playerElement') === 'elementless';
+        this.log.info('loading Vizbee SDK', { url: sdkUrl, mode: isElementless ? 'elementless' : 'element' });
         this.loadedSdkUrl = sdkUrl;
         await loadScript(sdkUrl);
       }
@@ -93,10 +98,11 @@ export class VizbeeService implements IVizbeeService {
       this.log.warn('SDK not available on window.vizbee; continuity disabled');
       return;
     }
+    if (!window.vizbee) return;
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
       ctx.start(appId);
-      ctx.getAppAdapter().setDeeplinkHandler((info: any) => this.onDeeplink(info));
+      ctx.getAppAdapter().setDeeplinkHandler((info) => this.onDeeplink(info));
       this.log.info('continuity started', { appId });
     } catch (e) {
       this.log.error('continuity start failed', e);
@@ -108,8 +114,18 @@ export class VizbeeService implements IVizbeeService {
   //   - `vizbeeSdk` → full vs light, ES5 vs ES6 (the path under that origin)
   // Tizen/webOS/Xbox expose all four variants in Settings; Vizio ships a single
   // monolithic build, and desktop has none (App.ts gates init off → undefined).
+  //
+  // When `playerElement` is 'elementless', the dedicated elementless builds are
+  // used instead (samsung-el / lg-el / xbox-el). These are currently only
+  // available on the dev origin, so that origin is used for all environments.
   private resolveSdkUrl(platform: PlatformName): string | undefined {
-    const origin = sdkOrigin(services().flags.get('sdkEnv'));
+    if (services().flags.get('playerElement') === 'elementless') {
+      const esVariant = services().flags.get('vizbeeSdk').endsWith('es6') ? 'es6' : 'es5';
+      return SDK_ELEMENTLESS_URL[esVariant][platform];
+    }
+
+    const env = services().flags.get('sdkEnv');
+    const origin = sdkOrigin(env);
 
     // Vizio: single monolithic build at the env origin root (no full/light).
     if (platform === 'viziosmartcast') return `${origin}/v7/vizbee.js`;
@@ -121,8 +137,13 @@ export class VizbeeService implements IVizbeeService {
     // full = the monolithic SDK at the origin root (one file serves ES5 + ES6).
     if (variant.startsWith('full')) return `${origin}/v7/vizbee.js`;
     // light = the per-target build under /<segment>/; ES6 adds an /es6/ segment.
+    // DEV serves the newer "directsync" light builds under an extra /sdk/
+    // segment (…/sdk/lg/v7/…); qa/prod don't have that path (they 403/404), so
+    // the prefix is dev-only. Switch env to Dev in Settings (or ?ff_sdkEnv=dev)
+    // to load it.
+    const devPrefix = env === 'dev' ? 'sdk/' : '';
     const es6 = variant.endsWith('es6') ? 'es6/' : '';
-    return `${origin}/${segment}/${es6}v7/vizbee.js`;
+    return `${origin}/${devPrefix}${segment}/${es6}v7/vizbee.js`;
   }
 
   private onDeeplink(videoInfo: any): void {
@@ -174,25 +195,89 @@ export class VizbeeService implements IVizbeeService {
       this.log.info('deeplink: registered cast video', { id: video.id, videoUrl });
     }
 
+    // Remember the exact guid the mobile used so setVideo can echo it back.
+    this.deeplinkGuidMap.set(video.id, guid);
     this.log.info('deeplink: navigating to player', { id: video.id });
     services().router.navigate(`/player/${encodeURIComponent(video.id)}`);
   }
 
   setVideo(meta: VizbeeVideoMeta, binding: VizbeePlayerBinding): void {
     if (!window.vizbee?.continuity) return;
-    this.log.debug('setVideo', { id: meta.id, title: meta.title, isLive: !!meta.isLive });
+    const isElementless = services().flags.get('playerElement') === 'elementless';
+    // Use the exact guid the mobile sent (stored on deeplink) so the SDK can
+    // correlate the cast. Fall back to the standard format for locally-initiated
+    // playback where no deeplink guid was recorded.
+    const sdkGuid = this.deeplinkGuidMap.get(meta.id)
+      ?? `category:${meta.isLive ? 'live' : 'vod'}::media:${meta.id}`;
+    this.log.debug('setVideo', { id: meta.id, sdkGuid, title: meta.title, isLive: !!meta.isLive, isElementless });
+    if (isElementless) this.log.info('elementless mode: using getVideoInfo() polling (no media element)');
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
-      const adapter = new window.vizbee.continuity.adapters.PlayerAdapter();
-      adapter.setPlayerType(window.vizbee.continuity.adapters.PlayerType.HTML);
-      adapter.setPlayerElement(binding.videoEl);
-      adapter.setPlayHandler(() => binding.onPlay());
-      adapter.setPauseHandler(() => binding.onPause());
-      adapter.setSeekHandler((timeMs: number) => binding.onSeek(timeMs / 1000));
-      adapter.setStopHandler(() => binding.onStop());
+
+      // Remove the previous adapter (if any) before registering the new video.
+      // This clears old metadata so the sender doesn't see stale title/image
+      // during the new video's loading/buffering phase.
+      if (this.currentAdapter) {
+        try { ctx.removePlayerAdapter(this.currentAdapter); } catch (_) {}
+        this.currentAdapter = null;
+      }
+
+      // Adapters map differs between SDK versions. HTMLPlayerAdapter presence is
+      // the discriminator — it only exists in the new API:
+      //
+      //   old SDK:  PlayerAdapter('html')           |  PlayerAdapter('html', element)
+      //   new SDK:  PlayerAdapter()                 |  HTMLPlayerAdapter(element)
+      //
+      // Both old and new SDKs use PlayerAdapter for elementless — the SDK's
+      // _isValidPlayerAdapter check is instanceof PlayerAdapter, so BasePlayerAdapter
+      // (old SDK type) must never be used; it does not pass that check.
+      const adapters = window.vizbee.continuity.adapters as any;
+      const { PlayerAdapter } = window.vizbee.continuity.adapters;
+      const isNewSdkApi = !!adapters.HTMLPlayerAdapter;
+
+      let adapter: any;
+      if (isElementless) {
+        // Element-less mode: no media element passed to the adapter.
+        // PlayerPage drives all state via notifyPlayerState(); the poller only
+        // reads position + duration from this getter.
+        adapter = isNewSdkApi
+          ? new PlayerAdapter()
+          : new (PlayerAdapter as any)('html');
+        adapter.setVideoInfoGetter(() => {
+          const el = binding.videoEl;
+          const s = new window.vizbee!.continuity.messages.VideoStatus();
+          s.guid = sdkGuid;
+          s.currentPosition = (el.currentTime || 0) * 1000;
+          s.duration = (el.duration || 0) * 1000;
+          s.isLive = !!meta.isLive;
+          s.state = el.paused ? 'paused' : 'playing';
+          return s;
+        });
+      } else {
+        adapter = isNewSdkApi
+          ? new adapters.HTMLPlayerAdapter(binding.videoEl)
+          : new (PlayerAdapter as any)('html', binding.videoEl);
+      }
+
+      adapter.setPlayHandler(() => {
+        this.log.info('player event: play');
+        binding.onPlay();
+      });
+      adapter.setPauseHandler(() => {
+        this.log.info('player event: pause');
+        binding.onPause();
+      });
+      adapter.setSeekHandler((timeMs: number) => {
+        this.log.info('player event: seek', { timeSec: Math.round(timeMs / 100) / 10 });
+        binding.onSeek(timeMs / 1000);
+      });
+      adapter.setStopHandler((reason?: string) => {
+        this.log.info('player event: stop', { reason });
+        binding.onStop();
+      });
 
       const info = new window.vizbee.continuity.messages.VideoInfo();
-      info.guid = `category:${meta.isLive ? 'live' : 'vod'}::media:${meta.id}`;
+      info.guid = sdkGuid;
       info.title = meta.title;
       info.subtitle = '';
       info.desc = meta.description ?? '';
@@ -200,10 +285,24 @@ export class VizbeeService implements IVizbeeService {
       info.isLive = !!meta.isLive;
       info.videoUrl = meta.url;
 
+      // Register adapter + VideoInfo FIRST so the mobile has the correct
+      // title/image before any state notification arrives.
       ctx.setPlayerAdapterWithVideoInfo(adapter, info);
       this.currentAdapter = adapter;
     } catch (e) {
       this.log.error('setVideo failed', e);
+    }
+  }
+
+  notifyPlayerState(state: string): void {
+    if (services().flags.get('playerElement') !== 'elementless') return;
+    if (!this.currentAdapter || !window.vizbee?.continuity) return;
+    this.log.info('notifyPlayerState', { state });
+    try {
+      const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
+      (ctx as any).notifyPlayerState(state);
+    } catch (e) {
+      this.log.error('notifyPlayerState failed', { state, e });
     }
   }
 
@@ -212,7 +311,24 @@ export class VizbeeService implements IVizbeeService {
     this.log.debug('setVideoStop');
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
-      ctx.stopVideo();
+      const isElementless = services().flags.get('playerElement') === 'elementless';
+
+      if (isElementless && this.currentAdapter) {
+        // Push INTERRUPTED immediately via the new push API, then clean up.
+        // No timeout needed — removePlayerAdapter() also auto-signals INTERRUPTED.
+        const { PlayerState } = window.vizbee.continuity.messages;
+        const adapter = this.currentAdapter;
+        this.currentAdapter = null;
+        try {
+          (ctx as any).notifyPlayerState(PlayerState.INTERRUPTED);
+          this.log.info('elementless: notified INTERRUPTED');
+          ctx.removePlayerAdapter(adapter);
+        } catch (e) {
+          this.log.error('elementless: stop failed', e);
+        }
+        return;
+      }
+
       if (this.currentAdapter) {
         ctx.removePlayerAdapter(this.currentAdapter);
         this.currentAdapter = null;
@@ -263,34 +379,48 @@ const SDK_LIGHT_SEGMENT: Partial<Record<PlatformName, string>> = {
   xbox: 'xbox',
 };
 
+// Element-less SDK builds — dev origin only. ES variant mirrors the vizbeeSdk flag.
+const SDK_ELEMENTLESS_URL: Record<'es5' | 'es6', Partial<Record<PlatformName, string>>> = {
+  es5: {
+    tizen: 'https://vzb-origin-dev.s3.amazonaws.com/samsung-el/v7/vizbee.js',
+    webos: 'https://vzb-origin-dev.s3.amazonaws.com/lg-el/v7/vizbee.js',
+    xbox: 'https://vzb-origin-dev.s3.amazonaws.com/xbox-el/v7/vizbee.js',
+  },
+  es6: {
+    tizen: 'https://vzb-origin-dev.s3.amazonaws.com/samsung-el/es6/v7/vizbee.js',
+    webos: 'https://vzb-origin-dev.s3.amazonaws.com/lg-el/es6/v7/vizbee.js',
+    xbox: 'https://vzb-origin-dev.s3.amazonaws.com/xbox-el/es6/v7/vizbee.js',
+  },
+};
+
 // Import the bundled SDK for npm builds. __SDK_NPM_PACKAGE__ is a build-time
 // constant (Vite define); the literal import is required so the bundler
 // includes the package, and the branch tree-shakes away in builds where the
 // constant is empty (script builds). Each package is a side-effect module that
 // populates window.vizbee. Add a branch per package as more ship.
 async function loadBundledSdk(): Promise<boolean> {
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung') {
-    await import('@vizbeetv/sdk/samsung');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung') {
+    await import('@vizbeetv/sdk-qa/samsung');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung/es6') {
-    await import('@vizbeetv/sdk/samsung/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung/es6') {
+    await import('@vizbeetv/sdk-qa/samsung/es6');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg') {
-    await import('@vizbeetv/sdk/lg');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg') {
+    await import('@vizbeetv/sdk-qa/lg');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/lg/es6') {
-    await import('@vizbeetv/sdk/lg/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg/es6') {
+    await import('@vizbeetv/sdk-qa/lg/es6');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox') {
-    await import('@vizbeetv/sdk/xbox');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox') {
+    await import('@vizbeetv/sdk-qa/xbox');
     return true;
   }
-  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox/es6') {
-    await import('@vizbeetv/sdk/xbox/es6');
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox/es6') {
+    await import('@vizbeetv/sdk-qa/xbox/es6');
     return true;
   }
   return false;
