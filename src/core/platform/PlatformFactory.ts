@@ -20,6 +20,6 @@ export class PlatformFactory {
   }
 
   static get supportedPlatforms(): readonly PlatformName[] {
-    return ['viziosmartcast', 'tizen', 'webos', 'xbox', 'desktop'] as const;
+    return ['viziosmartcast', 'tizen', 'webos', 'xbox', 'firetv', 'desktop'] as const;
   }
 }

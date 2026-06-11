@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cordova project manifest for the Vizbee Sample App — Amazon FireTV.
+
+  The app opens a full-screen WebView that loads the hosted sample webapp URL
+  (configured via FIRETV_APP_URL at build time). window.VizbeeBridge is injected
+  into all pages by the vizbee-bridge plugin via addJavascriptInterface.
+-->
+<widget id="tv.vizbee.sample" version="1.0.0"
+  xmlns="http://www.w3.org/ns/widgets"
+  xmlns:cdv="http://cordova.apache.org/ns/1.0">
+
+  <name>Vizbee Sample App</name>
+  <description>Cross-TV Vizbee sample webapp — FireTV platform</description>
+  <author email="sarvesh@vizbee.tv" href="https://vizbee.tv">Vizbee Inc.</author>
+
+  <!-- Launcher page: redirects WebView to the configured app URL. -->
+  <content src="index.html" />
+
+  <!-- Allow all network access (dev + production CDN/ngrok URLs). -->
+  <access origin="*" />
+  <allow-navigation href="*" />
+  <allow-intent href="http://*/*" />
+  <allow-intent href="https://*/*" />
+
+  <!-- Custom bridge: injects window.VizbeeBridge into all WebView pages. -->
+  <plugin name="vizbee-bridge" spec="file:vizbee-bridge" />
+
+  <platform name="android">
+    <!-- FireTV is landscape-only; full screen, no overscroll bounce. -->
+    <preference name="Orientation" value="landscape" />
+    <preference name="FullScreen" value="true" />
+    <preference name="DisallowOverscroll" value="true" />
+
+    <!-- Fire OS 8 = Android API 33; minimum Fire OS 5 = API 21. -->
+    <preference name="android-minSdkVersion" value="21" />
+    <preference name="android-targetSdkVersion" value="35" />
+
+    <!-- Hardware acceleration is required for smooth video playback. -->
+    <preference name="AndroidHardwareAcceleration" value="true" />
+
+    <!-- Keep the WebView alive when the app is sent to background. -->
+    <preference name="KeepRunning" value="true" />
+  </platform>
+</widget>

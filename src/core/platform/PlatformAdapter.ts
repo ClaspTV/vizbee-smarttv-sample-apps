@@ -7,6 +7,7 @@ export type PlatformName =
   | 'tizen'
   | 'webos'
   | 'xbox'
+  | 'firetv'
   | 'desktop';
 
 export interface DeviceInfo {
