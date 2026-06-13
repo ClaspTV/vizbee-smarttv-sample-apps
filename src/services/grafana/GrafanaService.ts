@@ -7,9 +7,9 @@ export class GrafanaService {
 
   start(): void {
     this.faro = initializeFaro({
-      url: 'https://faro-collector-prod-ap-south-1.grafana.net/collect/9dbe5ab1924398918716b20443338e23',
+      url: 'https://faro-collector-prod-us-east-2.grafana.net/collect/e3628cf010e0f208348f8dcb608e00d6',
       app: {
-        name: 'vizbee',
+        name: 'Vizbee Omni',
         version: '1.0.0',
         environment: 'production',
       },
