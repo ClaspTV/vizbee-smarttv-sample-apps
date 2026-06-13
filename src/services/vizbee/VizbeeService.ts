@@ -109,19 +109,18 @@ export class VizbeeService implements IVizbeeService {
     }
   }
 
-  // Compose the SDK <script> URL from two orthogonal axes:
+  // Compose the SDK <script> URL from two axes:
   //   - `sdkEnv`    → the origin host (dev/qa/prod) — see services/sdkEnv.ts
-  //   - `vizbeeSdk` → full vs light, ES5 vs ES6 (the path under that origin)
-  // Tizen/webOS/Xbox expose all four variants in Settings; Vizio ships a single
-  // monolithic build, and desktop has none (App.ts gates init off → undefined).
+  //   - `vizbeeSdk` → full (500KB) vs light (330KB)
+  // Tizen/webOS/Xbox expose both in Settings; Vizio ships a single monolithic
+  // build, and desktop has none (App.ts gates init off → undefined).
   //
   // When `playerElement` is 'elementless', the dedicated elementless builds are
   // used instead (samsung-el / lg-el / xbox-el). These are currently only
   // available on the dev origin, so that origin is used for all environments.
   private resolveSdkUrl(platform: PlatformName): string | undefined {
     if (services().flags.get('playerElement') === 'elementless') {
-      const esVariant = services().flags.get('vizbeeSdk').endsWith('es6') ? 'es6' : 'es5';
-      return SDK_ELEMENTLESS_URL[esVariant][platform];
+      return SDK_ELEMENTLESS_URL['es5'][platform];
     }
 
     const env = services().flags.get('sdkEnv');
@@ -130,20 +129,18 @@ export class VizbeeService implements IVizbeeService {
     // Vizio: single monolithic build at the env origin root (no full/light).
     if (platform === 'viziosmartcast') return `${origin}/v7/vizbee.js`;
 
+    const variant = services().flags.get('vizbeeSdk');
+
+    if (variant === 'full') {
+      const fullSegment = SDK_FULL_SEGMENT[platform];
+      if (!fullSegment) return undefined;
+      return `${origin}/${fullSegment}/v7/vizbee.js`;
+    }
+
     const segment = SDK_LIGHT_SEGMENT[platform];
     if (!segment) return undefined;
-
-    const variant = services().flags.get('vizbeeSdk');
-    // full = the monolithic SDK at the origin root (one file serves ES5 + ES6).
-    if (variant.startsWith('full')) return `${origin}/v7/vizbee.js`;
-    // light = the per-target build under /<segment>/; ES6 adds an /es6/ segment.
-    // DEV serves the newer "directsync" light builds under an extra /sdk/
-    // segment (…/sdk/lg/v7/…); qa/prod don't have that path (they 403/404), so
-    // the prefix is dev-only. Switch env to Dev in Settings (or ?ff_sdkEnv=dev)
-    // to load it.
     const devPrefix = env === 'dev' ? 'sdk/' : '';
-    const es6 = variant.endsWith('es6') ? 'es6/' : '';
-    return `${origin}/${devPrefix}${segment}/${es6}v7/vizbee.js`;
+    return `${origin}/${devPrefix}${segment}/v7/vizbee.js`;
   }
 
   private onDeeplink(videoInfo: any): void {
@@ -373,6 +370,12 @@ export class VizbeeService implements IVizbeeService {
 // reporting. The `light` builds are the WebView2-compatible @vizbeetv/sdk xbox
 // bundles; prefer those on the WebView2 shell (or wire a host-object bridge in
 // MainPage.xaml.cs to proxy the WinRT calls for the full build).
+const SDK_FULL_SEGMENT: Partial<Record<PlatformName, string>> = {
+  tizen: 'samsungtv_tizen',
+  webos: 'lg',
+  xbox: 'xbox',
+};
+
 const SDK_LIGHT_SEGMENT: Partial<Record<PlatformName, string>> = {
   tizen: 'samsung',
   webos: 'lg',

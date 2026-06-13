@@ -3,7 +3,7 @@
 // adapts automatically.
 
 export interface FeatureFlags {
-  vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
+  vizbeeSdk: 'full' | 'light';
   // Whether the Vizbee SDK receives a <video> element ('element') or operates
   // in element-less mode ('elementless') where state is polled via getVideoInfo().
   // Elementless uses dedicated dev-origin SDK builds (samsung-el/lg-el/xbox-el).
@@ -38,7 +38,7 @@ export interface FeatureFlags {
 // inside the build-aware "Vizbee SDK" row, not as its own row.)
 export const DEFAULT_FLAGS: FeatureFlags = {
   appBuild: 'script',
-  vizbeeSdk: 'light-es5',
+  vizbeeSdk: 'light',
   sdkEnv: 'prod',
   videoPlayer: 'html',
   npmModule: 'es5',
@@ -68,10 +68,8 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
 // here — they render as a Toggle. Keys present here render as a RadioGroup.
 export const FLAG_OPTIONS: Partial<Record<FlagKey, ReadonlyArray<{ value: string; label: string }>>> = {
   vizbeeSdk: [
-    { value: 'full-es5', label: 'Use Full Vizbee SDK - ES5' },
-    { value: 'full-es6', label: 'Use Full Vizbee SDK - ES6' },
-    { value: 'light-es5', label: 'Use Light Vizbee SDK - ES5' },
-    { value: 'light-es6', label: 'Use Light Vizbee SDK - ES6' },
+    { value: 'full', label: 'Full Vizbee SDK (500KB)' },
+    { value: 'light', label: 'Light Vizbee SDK (330KB)' },
   ],
   sdkEnv: [
     { value: 'dev', label: 'Dev (vzb-origin-dev)' },

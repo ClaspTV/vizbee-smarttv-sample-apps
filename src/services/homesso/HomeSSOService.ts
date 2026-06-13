@@ -20,10 +20,9 @@ const HOMESSO_SDK_MAJOR = 'v1';
 
 type EsVariant = 'es5' | 'es6';
 
-// es5 vs es6 for the HomeSSO script, taken from the vizbeeSdk flag's suffix
-// (full-es5 | full-es6 | light-es5 | light-es6). npm builds map here too.
+// HomeSSO always uses es5 (no ES variant selection in vizbeeSdk anymore).
 function resolveEsVariant(): EsVariant {
-  return services().flags.get('vizbeeSdk').endsWith('es6') ? 'es6' : 'es5';
+  return 'es5';
 }
 
 const homeSSOUrl = (variant: EsVariant): string =>
