@@ -46,6 +46,8 @@
     "vite": "^5.2.0"
   },
   "dependencies": {
+    "@grafana/faro-web-sdk": "^2.7.1",
+    "@grafana/faro-web-tracing": "^2.7.1",
     "@vizbeetv/homesso-sdk-qa": "1.0.3",
     "@vizbeetv/sdk-qa": "7.8.48"
   }

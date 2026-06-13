@@ -26,11 +26,16 @@ import { HomeSSOService } from './services/homesso/HomeSSOService';
 import { setServices } from './services/ServiceContainer';
 import { Router } from './app/Router';
 import { startApp } from './app/App';
+import { GrafanaService } from './services/grafana/GrafanaService';
 import { Logger, setLogLevel } from './services/logger/Logger';
 
 const log = new Logger('main');
 
 async function boot(): Promise<void> {
+  // Initialize Grafana Faro observability first so it captures everything.
+  const grafana = new GrafanaService();
+  grafana.start();
+
   log.info('starting Vizbee Sample Webapp');
 
   // 1. Platform — async so Rollup can chunk-split per-platform adapters.
