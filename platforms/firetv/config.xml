@@ -6,7 +6,7 @@
   (configured via FIRETV_APP_URL at build time). window.VizbeeBridge is injected
   into all pages by the vizbee-bridge plugin via addJavascriptInterface.
 -->
-<widget id="tv.vizbee.sample" version="1.0.0"
+<widget id="com.vizbee.dev.samplewebapp" version="1.0.0"
   xmlns="http://www.w3.org/ns/widgets"
   xmlns:cdv="http://cordova.apache.org/ns/1.0">
 
@@ -23,6 +23,12 @@
   <allow-intent href="http://*/*" />
   <allow-intent href="https://*/*" />
 
+  <!-- App icon (Xbox StoreLogo.png). -->
+  <icon src="res/icon/android/icon.png" />
+
+  <!-- Launch splash (Xbox SplashScreen.png). -->
+  <splash src="res/screen/android/splash.png" />
+
   <!-- Custom bridge: injects window.VizbeeBridge into all WebView pages. -->
   <plugin name="vizbee-bridge" spec="file:vizbee-bridge" />
 
@@ -31,7 +37,6 @@
     <preference name="Orientation" value="landscape" />
     <preference name="FullScreen" value="true" />
     <preference name="DisallowOverscroll" value="true" />
-
     <!-- Fire OS 8 = Android API 33; minimum Fire OS 5 = API 21. -->
     <preference name="android-minSdkVersion" value="21" />
     <preference name="android-targetSdkVersion" value="35" />

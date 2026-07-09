@@ -85,7 +85,13 @@
   width: 0;
   background: var(--color-gradient-1);
   border-radius: var(--radius-pill);
+  -webkit-transition: width 200ms linear;
   transition: width 200ms linear;
+}
+/* While scrubbing: kill the transition so interval ticks render instantly */
+.player__progress-fill--scrubbing {
+  -webkit-transition: none !important;
+  transition: none !important;
 }
 
 .player__buttons {

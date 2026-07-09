@@ -67,6 +67,88 @@ export function renderPlayerPage(
   };
   const seekBack = (): void => seekBy(-SEEK_STEP_SEC);
   const seekForward = (): void => seekBy(SEEK_STEP_SEC);
+
+  // Smooth seek for REWIND / FAST_FORWARD (Prime Video style):
+  //   • First keydown  → jump SEEK_STEP_SEC, start setInterval animation
+  //   • Each keydown   → extends the "still held" debounce window
+  //   • setInterval    → advances visual position at 15 % of total duration/s
+  //   • keyup          → commit immediately (most reliable release signal)
+  //   • 200 ms silence → fallback commit (TV remotes that suppress keyup)
+  //
+  // Uses setInterval (not rAF) because some TV WebViews throttle rAF
+  // while a media element is active.
+  // Speed is percentage-based so a 10-min and a 2-min video feel the same.
+  let pendingSeekTime: number | undefined;
+  let seekDirection: -1 | 1 | 0 = 0;
+  let seekAnimInterval: number | undefined;
+  let seekCommitTimer: number | undefined;
+  let seekLastMs = 0;
+  const SEEK_SPEED_PCT = 15; // % of total duration per real-second held
+
+  const updateSeekBar = (t: number): void => {
+    const dur = videoEl.duration || video.durationSec;
+    if (dur && isFinite(dur)) {
+      progressFill.style.width = `${Math.max(0, Math.min(100, (t / dur) * 100))}%`;
+    }
+    timeEl.textContent = `${formatTime(t)} / ${formatTime(dur)}`;
+  };
+
+  const stopSeekAnim = (): void => {
+    window.clearInterval(seekAnimInterval);
+    seekAnimInterval = undefined;
+    seekLastMs = 0;
+  };
+
+  const commitSeek = (): void => {
+    stopSeekAnim();
+    window.clearTimeout(seekCommitTimer);
+    seekDirection = 0;
+    progressFill.classList.remove('player__progress-fill--scrubbing');
+    if (pendingSeekTime !== undefined) {
+      videoEl.currentTime = pendingSeekTime;
+      pendingSeekTime = undefined;
+    }
+  };
+
+  const onSeekKeyDown = (direction: -1 | 1): void => {
+    if (pendingSeekTime === undefined) {
+      // First press: jump immediately and start the animation.
+      const dur = videoEl.duration || video.durationSec;
+      pendingSeekTime = Math.max(0, Math.min(dur || 0, (videoEl.currentTime ?? 0) + direction * SEEK_STEP_SEC));
+      seekDirection = direction;
+      // Disable CSS transition so interval ticks render as instant width
+      // changes. Works on WebKit (Tizen/webOS) via the !important class rule.
+      progressFill.classList.add('player__progress-fill--scrubbing');
+      updateSeekBar(pendingSeekTime);
+      stopSeekAnim();
+      seekLastMs = performance.now();
+      seekAnimInterval = window.setInterval(() => {
+        if (pendingSeekTime === undefined || seekDirection === 0) return;
+        const now = performance.now();
+        const dt = (now - seekLastMs) / 1000;
+        seekLastMs = now;
+        const dur = videoEl.duration || video.durationSec;
+        const speedSec = ((dur || 0) * SEEK_SPEED_PCT) / 100;
+        pendingSeekTime = Math.max(0, Math.min(dur || 0, pendingSeekTime + seekDirection * speedSec * dt));
+        updateSeekBar(pendingSeekTime);
+      }, 50);
+    } else if (seekDirection !== direction) {
+      seekDirection = direction; // direction reversed mid-hold
+    }
+    // Each keydown (repeat or not) proves key is still held — push back commit.
+    window.clearTimeout(seekCommitTimer);
+    seekCommitTimer = window.setTimeout(commitSeek, 800);
+  };
+
+  // keyup is the most reliable "key released" signal on platforms that fire it.
+  // commitSeek is idempotent so double-firing with the debounce is harmless.
+  const onSeekKeyUp = (e: KeyboardEvent): void => {
+    const seekKeyCodes = new Set([412, 417, 179]); // REWIND, FF, PLAY_PAUSE
+    if (pendingSeekTime !== undefined && seekKeyCodes.has(e.keyCode)) {
+      commitSeek();
+    }
+  };
+  window.addEventListener('keyup', onSeekKeyUp, true);
   const togglePlay = (): void => {
     if (videoEl.paused) videoEl.play().catch((e) => console.warn('video.play() rejected', e?.name, e?.message));
     else videoEl.pause();
@@ -74,7 +156,12 @@ export function renderPlayerPage(
 
   // Leave the player and return to the previous screen (Home). Shared by the
   // STOP/BACK keys and the end-of-playback handler below.
+  // Guard prevents double-navigation when both 'ended' and the timeupdate
+  // fallback fire in the same tick (common on Tizen/Android WebView HLS).
+  let exited = false;
   const exitPlayer = (): void => {
+    if (exited) return;
+    exited = true;
     services().vizbee.setVideoStop();
     services().router.back('/home');
   };
@@ -188,15 +275,31 @@ export function renderPlayerPage(
   };
   showOverlay();
 
-  // Progress + time
+  // Progress + time — skip visual update while a debounced seek is pending
+  // (seekByDebounced already updated the display to the preview position).
   videoEl.addEventListener('timeupdate', () => {
     const cur = videoEl.currentTime || 0;
     const dur = videoEl.duration || video.durationSec;
-    if (dur && isFinite(dur)) {
-      progressFill.style.width = `${(cur / dur) * 100}%`;
+    if (pendingSeekTime === undefined) {
+      if (dur && isFinite(dur)) {
+        progressFill.style.width = `${(cur / dur) * 100}%`;
+      }
+      timeEl.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
     }
-    timeEl.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+
+    // Fallback for TV browsers that don't reliably fire 'ended' for HLS VOD.
+    // Threshold 1 s gives HLS a full segment's worth of headroom.
+    const actualDur = videoEl.duration;
+    if (isFinite(actualDur) && actualDur > 0 && cur >= actualDur - 1.0) {
+      exitPlayer();
+    }
   });
+
+  // Belt-and-suspenders: poll for videoEl.ended every 500 ms. Catches the
+  // case where both 'ended' and timeupdate stop firing before the threshold.
+  const endedPoll = window.setInterval(() => {
+    if (videoEl.ended) exitPlayer();
+  }, 500);
 
   // Global remote shortcuts. ENTER goes to the focused button (FocusableButton
   // handles it); LEFT/RIGHT move focus between buttons UNLESS the progress
@@ -216,10 +319,10 @@ export function renderPlayerPage(
         togglePlay();
         break;
       case 'REWIND':
-        seekBack();
+        onSeekKeyDown(-1);
         break;
       case 'FAST_FORWARD':
-        seekForward();
+        onSeekKeyDown(1);
         break;
       case 'LEFT':
         if (document.activeElement === progress) {
@@ -243,6 +346,12 @@ export function renderPlayerPage(
   return () => {
     offRemote();
     window.clearTimeout(hideTimer);
+    stopSeekAnim();
+    window.clearTimeout(seekCommitTimer);
+    window.clearInterval(endedPoll);
+    window.removeEventListener('keyup', onSeekKeyUp, true);
+    pendingSeekTime = undefined;
+    seekDirection = 0;
     services().vizbee.setVideoStop();
     videoEl.pause();
     videoEl.removeEventListener('play', syncPlayLabel);

@@ -88,6 +88,12 @@ if ! npx cordova plugin ls 2>/dev/null | grep -q "vizbee-bridge"; then
   npx cordova plugin add ./vizbee-bridge --nofetch
 fi
 
+# Patch MainActivity.java to dispatch synthetic keydown(4) on BACK press
+# instead of finishing the Activity — required so the JS exit dialog works.
+# Idempotent: the hook skips if the override is already present.
+echo "    Applying back-button override to MainActivity.java..."
+node "$CORDOVA_ROOT/hooks/after_platform_add/override-back-button.js" "$CORDOVA_ROOT"
+
 # ── Step 4: Cordova build / run ───────────────────────────────────────────────
 
 echo "==> [4/4] Cordova $MODE..."
