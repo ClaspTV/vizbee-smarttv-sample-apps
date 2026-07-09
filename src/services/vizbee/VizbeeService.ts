@@ -226,7 +226,7 @@ export class VizbeeService implements IVizbeeService {
       // the discriminator — it only exists in the new API:
       //
       //   old SDK:  PlayerAdapter('html')           |  PlayerAdapter('html', element)
-      //   new SDK:  PlayerAdapter()                 |  HTMLPlayerAdapter(element)
+      //   new SDK:  PlayerAdapter('html')           |  HTMLPlayerAdapter(element)
       //
       // Both old and new SDKs use PlayerAdapter for elementless — the SDK's
       // _isValidPlayerAdapter check is instanceof PlayerAdapter, so BasePlayerAdapter
@@ -241,7 +241,7 @@ export class VizbeeService implements IVizbeeService {
         // PlayerPage drives all state via notifyPlayerState(); the poller only
         // reads position + duration from this getter.
         adapter = isNewSdkApi
-          ? new PlayerAdapter()
+          ? new PlayerAdapter('html')
           : new (PlayerAdapter as any)('html');
         adapter.setVideoInfoGetter(() => {
           const el = binding.videoEl;
@@ -273,7 +273,12 @@ export class VizbeeService implements IVizbeeService {
       });
       adapter.setStopHandler((reason?: string) => {
         this.log.info('player event: stop', { reason });
-        binding.onStop();
+        if (reason !== 'stop_implicit') {
+          this.log.info('player event: stop → calling onStop()');
+          binding.onStop();
+        } else {
+          this.log.info('player event: stop_implicit → ignoring onStop()');
+        }
       });
 
       const info = new window.vizbee.continuity.messages.VideoInfo();

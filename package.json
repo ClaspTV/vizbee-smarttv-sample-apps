@@ -47,6 +47,6 @@
   },
   "dependencies": {
     "@vizbeetv/homesso-sdk-qa": "1.0.3",
-    "@vizbeetv/sdk-qa": "7.8.48"
+    "@vizbeetv/sdk-qa": "file:../vtv-lite-app-features-element-less/dist/npm"
   }
 }
