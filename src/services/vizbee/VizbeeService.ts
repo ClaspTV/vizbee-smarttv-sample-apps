@@ -428,6 +428,35 @@ async function loadBundledSdk(): Promise<boolean> {
     await import('@vizbeetv/sdk-qa/xbox/es6');
     return true;
   }
+  // Element-less builds (samsung-el / lg-el / xbox-el). These are the only
+  // builds that expose the elementless status pipeline (notifyPlayerState); the
+  // non-el builds above have no such API, so an elementless app bundled against
+  // them silently drops all playback status. Match the script-build behavior in
+  // resolveSdkUrl(), which loads the -el URLs when playerElement is elementless.
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung-el/es5') {
+    await import('@vizbeetv/sdk-qa/samsung-el/es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung-el/es6') {
+    await import('@vizbeetv/sdk-qa/samsung-el/es6');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg-el/es5') {
+    await import('@vizbeetv/sdk-qa/lg-el/es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/lg-el/es6') {
+    await import('@vizbeetv/sdk-qa/lg-el/es6');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox-el/es5') {
+    await import('@vizbeetv/sdk-qa/xbox-el/es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/xbox-el/es6') {
+    await import('@vizbeetv/sdk-qa/xbox-el/es6');
+    return true;
+  }
   return false;
 }
 
