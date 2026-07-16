@@ -86,6 +86,7 @@ export function renderPlayerPage(
       url: video.videoUrl,
       description: video.description,
       posterUrl: video.posterUrl,
+      isLive: video.isLive,
     },
     {
       videoEl,

@@ -7,6 +7,7 @@
 
 export interface VideoInfo {
   id: string;
+  isLive?: boolean;
   title: string;
   description: string;
   posterUrl: string;
@@ -17,6 +18,7 @@ export interface VideoInfo {
 export const VIDEOS: readonly VideoInfo[] = [
   {
     id: 'tears-of-steel',
+    isLive: false,
     title: 'Tears of Steel',
     description:
       'Sci-fi short with live action and CG, demonstrating Blender VFX in production.',
@@ -27,6 +29,7 @@ export const VIDEOS: readonly VideoInfo[] = [
   },
   {
     id: 'apple-bipbop',
+    isLive: false,
     title: 'Apple BipBop',
     description:
       "Apple's reference advanced HLS stream — multiple bitrates, audio renditions, and captions.",
@@ -37,6 +40,7 @@ export const VIDEOS: readonly VideoInfo[] = [
   },
   {
     id: 'mux-test-stream',
+    isLive: false,
     title: 'Mux Test Stream',
     description:
       'A multi-bitrate HLS test reel hosted by Mux for adaptive-streaming validation.',

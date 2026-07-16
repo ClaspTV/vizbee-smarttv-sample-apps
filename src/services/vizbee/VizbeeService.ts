@@ -190,6 +190,7 @@ export class VizbeeService implements IVizbeeService {
         posterUrl: videoInfo?.imgUrl || '',
         videoUrl,
         durationSec: 0,
+        isLive: videoInfo?.isLive,
       };
       registerVideo(video);
       this.log.info('deeplink: registered cast video', { id: video.id, videoUrl });
@@ -246,11 +247,11 @@ export class VizbeeService implements IVizbeeService {
         adapter.setVideoInfoGetter(() => {
           const el = binding.videoEl;
           const s = new window.vizbee!.continuity.messages.VideoStatus();
-          s.guid = sdkGuid;
-          s.currentPosition = (el.currentTime || 0) * 1000;
-          s.duration = (el.duration || 0) * 1000;
-          s.isLive = !!meta.isLive;
-          s.state = el.paused ? 'paused' : 'playing';
+            s.guid = sdkGuid;
+            s.currentPosition = (el.currentTime || 0) * 1000;
+            s.duration = (el.duration || 0) * 1000;
+            s.isLive = !!meta.isLive;
+            s.state = el.paused ? 'paused' : 'playing';
           return s;
         });
       } else {
@@ -273,7 +274,7 @@ export class VizbeeService implements IVizbeeService {
       });
       adapter.setStopHandler((reason?: string) => {
         this.log.info('player event: stop', { reason });
-        if (reason !== 'stop_implicit') {
+        if (reason !== 'stop_implicit' && reason !== 'stop_reason_before_next_video') {
           this.log.info('player event: stop → calling onStop()');
           binding.onStop();
         } else {

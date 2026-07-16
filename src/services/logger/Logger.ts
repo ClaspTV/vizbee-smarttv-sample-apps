@@ -53,7 +53,7 @@ export class Logger {
 
   private log(level: LogLevel, args: unknown[]): void {
     if (LEVEL_RANK[level] < LEVEL_RANK[_minLevel]) return;
-    const prefix = `[${level.toUpperCase()}][${this.tag}]`;
+    const prefix = `[${level.toUpperCase()}][${this.tag}][${new Date().toISOString()}]`;
     const fn =
       level === 'error'
         ? console.error
