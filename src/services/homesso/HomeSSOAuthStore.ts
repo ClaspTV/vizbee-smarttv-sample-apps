@@ -1,22 +1,12 @@
 import { EventEmitter } from '@/core/events/EventEmitter';
 import { Logger } from '@/services/logger/Logger';
 
-// App-owned HomeSSO account state.
-//
-// The HomeSSO SDK does NOT persist the user, expose a current-user getter, or
-// emit sign-in state events — the integrating app owns all of that. This store
-// is that owner: it holds who's signed in, persists it across launches, and is
-// the single source of truth feeding both the SDK's `setSignInInfoGetter` (so
-// the SDK knows whether to start a sign-in) and the Profile page UI.
-//
-// Persistence mirrors FeatureFlagService: a single JSON blob in localStorage.
-// The `pending` reg-code is transient (a sign-in in flight) — it lives in memory
-// only, never persisted.
+// App-owned HomeSSO account state (the SDK doesn't persist the user); JSON in
+// localStorage. `pending` reg-code is transient (in-memory only).
 
 export interface HomeSSOAccount {
-  // The sign-in type this account was established with (e.g. 'email', 'mvpd').
-  // Must match the `signInType` a mobile sender requests for the SDK to treat
-  // the device as already signed in for that type.
+  // Sign-in type this account was established with (e.g. 'email', 'mvpd'); must
+  // match the sender's requested `signInType` to count as already signed in.
   loginType: string;
   // The user's login identifier — an email address in the sample.
   login: string;
@@ -39,9 +29,8 @@ export interface AuthState {
   pending: PendingSignIn | null;
 }
 
-// Shape the SDK's `setSignInInfoGetter` expects back (matched structurally —
-// the script-loaded SDK ships no published .d.ts). See VizbeeSignInInfo in
-// @vizbeetv/homesso-sdk: userLoginType + isSignedIn are required.
+// Shape the SDK's `setSignInInfoGetter` expects (matched structurally; no .d.ts).
+// userLoginType + isSignedIn are required. See VizbeeSignInInfo.
 export interface VizbeeSignInInfo {
   userLoginType: string;
   isSignedIn: boolean;

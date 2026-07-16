@@ -9,17 +9,8 @@ import { Logger } from '@/services/logger/Logger';
 
 const log = new Logger('App');
 
-// App layout: persistent left-rail menu + content area into which pages render.
-// The menu lives across page transitions so navigation state stays put.
-//
-//   ┌──────────┬──────────────────────────────┐
-//   │          │                              │
-//   │  NavMenu │     <main class="content">   │
-//   │  (rail)  │     ← page renders here →    │
-//   │          │                              │
-//   └──────────┴──────────────────────────────┘
-//
-// The Player page adds .app-layout--immersive to hide the menu during playback.
+// App layout: persistent left-rail menu + content area where pages render.
+// Player page adds .app-layout--immersive to hide the menu during playback.
 export function startApp(root: HTMLElement, router: Router): void {
   root.innerHTML = '';
 
@@ -47,9 +38,8 @@ export function startApp(root: HTMLElement, router: Router): void {
     services().vizbee.init(services().config.get().vizbeeAppId);
   }
 
-  // HomeSSO modal preview: load the HomeSSO SDK so the Settings toggles can
-  // trigger its sign-in toasts with dummy data. Runs on every platform
-  // (including desktop) so the modal UI can be previewed during local dev.
+  // HomeSSO modal preview: load the SDK on every platform (incl. desktop)
+  // so Settings toggles can trigger its sign-in toasts with dummy data.
   void services().homeSSO.init();
 
   router.start('/home');

@@ -2,21 +2,8 @@ import { RemoteKeyService } from '@/core/input/RemoteKeyService';
 import { RemoteAction } from '@/core/input/keymaps';
 import { Logger } from '@/services/logger/Logger';
 
-// Spatial navigation: on UP/DOWN/LEFT/RIGHT, find the nearest focusable element
-// in that direction. Elements opt in via the `data-focusable` attribute.
-//
-// Why homegrown: TV apps need predictable focus, no scroll-jacking, and a tiny
-// runtime budget. Off-the-shelf libs add 20–40 KB and assume DOM scrollIntoView.
-//
-// Selection rule:
-//   1. Filter to candidates whose center lies in a ~126° cone around the
-//      requested axis (orthogonal/primary ratio <= CONE_RATIO). This blocks
-//      candidates that are "more vertical than horizontal" from being picked
-//      on a LEFT/RIGHT press (and vice versa) — even when subpixel rounding
-//      makes their on-axis delta non-zero.
-//   2. Among the survivors, score = primary distance + 2×orthogonal distance.
-//      Lowest score wins.
-//   3. Ignore zero-area / off-screen elements (transitions in flight).
+// Spatial navigation: on arrow keys, pick the nearest `data-focusable` element in
+// that direction (cone filter, score = primary + 2×orthogonal distance).
 
 const MIN_AXIS_TOLERANCE_PX = 4; // dx/dy must be at least this large to count as "in direction"
 const CONE_RATIO = 2;            // |orthogonal| / |primary| upper bound
@@ -28,9 +15,8 @@ export class FocusManager {
   private off: (() => void) | null = null;
   private paused = false;
 
-  // Track the last content-zone element so menu→content (RIGHT) restores it.
-  // Within content (e.g., LEFT between cards) we *don't* want any memory —
-  // pure spatial-nav-to-next-visible is the right behavior there.
+  // Last content-zone element, so menu→content (RIGHT) restores it. No memory
+  // within content — spatial-nav-to-next-visible is correct there.
   private lastContentFocus: HTMLElement | null = null;
   private readonly log = new Logger('Focus');
 
@@ -45,8 +31,7 @@ export class FocusManager {
     this.off = null;
   }
 
-  /** Suspend spatial navigation. Use during immersive views (e.g., Player)
-   * where LEFT/RIGHT mean seek, not focus move. */
+  /** Suspend spatial navigation (e.g., in Player, where LEFT/RIGHT seek). */
   pause(): void {
     this.paused = true;
   }
@@ -70,35 +55,25 @@ export class FocusManager {
     el.classList.add('is-focused');
     el.setAttribute('tabindex', '0');
     el.focus({ preventScroll: true });
-    // Manual scroll. scrollIntoView({block:'center'}) is unreliable on older
-    // TV browsers (Vizio SmartCast's WebKit silently no-ops in some
-    // versions), so we walk up scrollable ancestors and compute the scroll
-    // ourselves: vertical scroll containers get the element centered (TV
-    // pattern: focused row in the middle, neighbors peek above/below);
-    // horizontal containers — typically the rail — scroll only as needed.
+    // Manual scroll: scrollIntoView is unreliable on older TV browsers, so we
+    // walk scrollable ancestors ourselves (vertical centers, horizontal as needed).
     FocusManager.scrollFocusedIntoView(el);
     const zone = FocusManager.zoneOf(el);
     if (zone === 'content') {
       this.lastContentFocus = el;
     }
-    // Collapse the side nav while the user is in content. Press LEFT at the
-    // leftmost focusable in content to slide the menu back in (spatial nav
-    // picks a menu item, which flips zone back to 'menu' on next setFocus).
+    // Collapse the side nav while in content; LEFT at the leftmost content
+    // focusable picks a menu item and flips the zone back to 'menu'.
     document.querySelector('.app-layout')
       ?.classList.toggle('app-layout--menu-collapsed', zone === 'content');
   }
 
   private static scrollFocusedIntoView(el: HTMLElement): void {
-    // The app is rendered inside a transform: scale(--app-scale). DOMRects
-    // are in *visual* pixels (post-transform); scrollTop/Left are in
-    // *layout* pixels (pre-transform). Convert visual deltas back to
-    // layout space by dividing by the current scale.
+    // App is rendered inside transform: scale(--app-scale). DOMRects are visual
+    // px, scrollTop/Left are layout px — divide visual deltas by scale to convert.
     const scale = FocusManager.getAppScale();
-    // Vertical anchor: if the focused element sits inside a
-    // [data-scroll-anchor] block (e.g., a rail row), align that block's
-    // TOP to the scroll container's top instead of centering the focused
-    // element. This avoids half-visible neighbor rows when stepping
-    // between rails — neighbors either fully show or fully scroll off.
+    // If the focused element is inside a [data-scroll-anchor] block, align that
+    // block's top instead of centering, to avoid half-visible neighbor rows.
     const anchor = (el.closest('[data-scroll-anchor]') as HTMLElement | null) ?? el;
     let parent = el.parentElement;
     while (parent && parent !== document.body) {
@@ -174,16 +149,14 @@ export class FocusManager {
       return;
     }
 
-    // Focused element can keep an axis for itself by setting
-    // data-claim-axes="x" / "y" / "xy". Used by the player's progress bar
-    // so LEFT/RIGHT seek instead of moving focus.
+    // An element can claim an axis via data-claim-axes ("x"/"y"/"xy") to keep
+    // those keys (e.g. player progress bar seeks on LEFT/RIGHT).
     const claim = this.current.dataset.claimAxes ?? '';
     const axis = action === 'LEFT' || action === 'RIGHT' ? 'x' : 'y';
     if (claim.includes(axis)) return;
 
-    // Focus memory only for menu → content (RIGHT). Within content (cards in
-    // a rail, toggles in a list), pure spatial nav gives the user "next
-    // visible element", which is what they actually want.
+    // Focus memory only for menu → content (RIGHT); within content, pure
+    // spatial nav ("next visible element") is what the user wants.
     if (
       action === 'RIGHT' &&
       FocusManager.zoneOf(this.current) === 'menu' &&
@@ -206,20 +179,13 @@ export class FocusManager {
     const fromCx = fromRect.left + fromRect.width / 2;
     const fromCy = fromRect.top + fromRect.height / 2;
 
-    // Vertical navigation (UP/DOWN) stays strictly within the current zone:
-    // a card press of UP can never land on a menu item, and DOWN from
-    // Settings can never spill into a content card. Cross-zone movement is
-    // reserved for LEFT/RIGHT — LEFT from the leftmost content focusable
-    // picks a menu item (only menu items are still in the LEFT direction
-    // from there), and RIGHT from a menu item returns to lastContentFocus.
+    // UP/DOWN stay within the current zone; cross-zone movement is reserved
+    // for LEFT/RIGHT (LEFT into the menu, RIGHT back to lastContentFocus).
     const fromZone = FocusManager.zoneOf(from);
     const isVertical = dir === 'UP' || dir === 'DOWN';
 
-    // Two-tier selection. In-cone candidates win when they exist; out-of-
-    // cone candidates are kept as a fallback so navigation never silently
-    // fails when nothing is "in column" (e.g., UP from a far-right card to
-    // a left-aligned Play button — out of the strict cone but the obviously
-    // correct target).
+    // Two-tier selection: in-cone candidates win; out-of-cone kept as a fallback
+    // so nav never fails when nothing is strictly "in column".
     let inCone: { el: HTMLElement; score: number } | null = null;
     let outOfCone: { el: HTMLElement; score: number } | null = null;
 
@@ -227,8 +193,7 @@ export class FocusManager {
       if (el === from) continue;
       if (isVertical && FocusManager.zoneOf(el) !== fromZone) continue;
       const r = el.getBoundingClientRect();
-      // Skip elements that haven't been laid out yet (display:none, in
-      // mid-transition with width/height 0, etc.).
+      // Skip elements not yet laid out (display:none, mid-transition, etc.).
       if (r.width === 0 && r.height === 0) continue;
 
       const dx = r.left + r.width / 2 - fromCx;

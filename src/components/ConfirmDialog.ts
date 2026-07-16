@@ -5,18 +5,14 @@ export interface ConfirmDialogOptions {
   message?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  // Which button is focused when the dialog opens. Default 'confirm'; use
-  // 'cancel' for risky actions (e.g. Exit) so an accidental ENTER is safe.
+  // Button focused on open. Default 'confirm'; use 'cancel' for risky actions.
   defaultFocus?: 'confirm' | 'cancel';
   onConfirm: () => void;
   onCancel?: () => void;
 }
 
-// Modal confirmation for TV. While open it captures all remote input
-// (services().remoteKeys.capture), so spatial nav is frozen and the page
-// behind it can't act on BACK/ENTER. LEFT/RIGHT move between the two buttons,
-// ENTER activates the focused one, BACK cancels. Self-contained lifecycle:
-// the overlay removes itself and restores prior focus on close.
+// Modal TV confirmation. Captures remote input while open (LEFT/RIGHT switch,
+// ENTER activates, BACK cancels); restores prior focus on close.
 export function showConfirmDialog(opts: ConfirmDialogOptions): void {
   const prevActive = document.activeElement as HTMLElement | null;
 
@@ -44,10 +40,8 @@ export function showConfirmDialog(opts: ConfirmDialogOptions): void {
   actions.className = 'confirm-dialog__actions';
   dialog.appendChild(actions);
 
-  // Reuse the shared focusable-btn styling; focus is driven manually below
-  // (FocusManager is suspended by the input capture), so no data-focusable.
-  // Both buttons are neutral by default — focus is the only "active" cue, so
-  // the unfocused button never looks pre-selected (no --primary green fill).
+  // Reuse focusable-btn styling; focus is driven manually below (no
+  // data-focusable). Both buttons neutral — focus is the only active cue.
   const confirmBtn = document.createElement('button');
   confirmBtn.className = 'focusable-btn';
   confirmBtn.textContent = opts.confirmLabel ?? 'Confirm';
@@ -106,7 +100,7 @@ export function showConfirmDialog(opts: ConfirmDialogOptions): void {
     }
   });
 
-  // Pointer activation for desktop dev (remote ENTER is handled via capture).
+  // Pointer activation for desktop dev (remote ENTER handled via capture).
   confirmBtn.addEventListener('click', confirm);
   cancelBtn.addEventListener('click', cancel);
 

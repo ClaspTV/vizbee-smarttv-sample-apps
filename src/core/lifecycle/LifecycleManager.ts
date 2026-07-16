@@ -7,9 +7,8 @@ type LifecycleEvents = {
   exit: void;
 };
 
-// Wraps platform-specific visibility / pause / resume into one consistent API.
-// Pages and services subscribe via on('foreground', ...) without caring whether
-// the underlying signal came from visibilitychange, Tizen tizen.application, etc.
+// Wraps platform-specific visibility / pause / resume into one consistent API,
+// so subscribers needn't know the underlying signal (visibilitychange, Tizen, etc.).
 export class LifecycleManager {
   private readonly emitter = new EventEmitter<LifecycleEvents>();
   private readonly log = new Logger('LifecycleManager');

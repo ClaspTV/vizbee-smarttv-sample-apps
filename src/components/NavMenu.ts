@@ -1,17 +1,13 @@
 import { services } from '@/services/ServiceContainer';
 import logoUrl from '@/assets/logo.svg';
 
-// Persistent left-rail menu. Fixed-width (always shows icon + label) — keeps
-// item bounding rects stable so spatial navigation doesn't pick stale
-// positions during transitions.
-//
-// The Player page hides the entire menu via .app-layout--immersive.
+// Persistent fixed-width left-rail menu; stable item rects keep spatial nav
+// reliable. Player page hides it via .app-layout--immersive.
 
 interface MenuItem {
   id: string;
   label: string;
-  // Inline SVG markup. Unicode glyphs (⌂, ⚙) tofu out on Vizio's older
-  // WebKit fallback fonts, so we ship the icons as actual vectors.
+  // Inline SVG markup; Unicode glyphs tofu out on Vizio's older WebKit fonts.
   iconSvg: string;
   route: string;
 }
@@ -77,8 +73,7 @@ export function createNavMenu(): { element: HTMLElement; dispose: () => void } {
   menu.appendChild(brand);
   menu.appendChild(list);
 
-  // Active-route highlight. Driven by the router's change event (the router is
-  // in-memory; there's no location.hash to watch).
+  // Active-route highlight, driven by the router's change event.
   const updateActive = (path: string): void => {
     for (const el of itemEls) {
       const route = el.dataset.route ?? '';
@@ -88,8 +83,8 @@ export function createNavMenu(): { element: HTMLElement; dispose: () => void } {
   updateActive(services().router.getCurrentPath() || '/home');
   const offChange = services().router.onChange(({ path }) => updateActive(path));
 
-  // ENTER on a focused menu item navigates. RemoteKeyService preventsDefault
-  // on ENTER, so the native <button> click doesn't fire on TV — wire it here.
+  // ENTER on a focused item navigates; RemoteKeyService preventsDefault on
+  // ENTER (native click won't fire on TV), so wire it here.
   const off = services().remoteKeys.on(({ action }) => {
     if (action !== 'ENTER') return;
     const el = document.activeElement as HTMLElement | null;

@@ -1,9 +1,7 @@
 import { services } from '@/services/ServiceContainer';
 
 // Minimal focusable button. The data-focusable attribute is the contract
-// FocusManager looks for; everything else is presentation. on('click') maps
-// to the ENTER remote action automatically because the button receives DOM
-// focus and Enter dispatches a click in modern browsers.
+// FocusManager looks for; everything else is presentation.
 export interface FocusableButtonOptions {
   label: string;
   onActivate: () => void;
@@ -19,8 +17,7 @@ export function createFocusableButton(opts: FocusableButtonOptions): HTMLElement
 
   btn.addEventListener('click', opts.onActivate);
 
-  // ENTER from the remote: focused element receives keydown; the global
-  // RemoteKeyService preventsDefault, so wire ENTER explicitly.
+  // RemoteKeyService preventsDefault on ENTER, so wire it explicitly.
   const off = services().remoteKeys.on(({ action }) => {
     if (action === 'ENTER' && document.activeElement === btn) {
       opts.onActivate();

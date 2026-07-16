@@ -7,9 +7,8 @@ import { buildLabel, currentBuild, targetUrl } from '@/core/platform/appBuild';
 import { services } from '@/services/ServiceContainer';
 import { DEFAULT_FLAGS, FLAG_LABELS, FLAG_OPTIONS, FlagKey } from '@/services/feature-flags/flags';
 
-// Flags whose change requires an in-place reload (they affect the SDK <script>
-// URL, which is injected once at boot). appBuild / npmModule are URL redirects
-// to separate hosted apps — those keep their own prompts.
+// Flags requiring an in-place reload (they affect the boot-injected SDK <script>
+// URL). appBuild / npmModule redirect to separate hosted apps and prompt separately.
 const RELOAD_FLAGS: ReadonlySet<FlagKey> = new Set<FlagKey>(['vizbeeSdk', 'sdkEnv', 'playerElement']);
 
 export function renderSettingsPage(root: HTMLElement): () => void {
@@ -31,8 +30,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   header.appendChild(subtitle);
 
   // --- Reload banner -------------------------------------------------------
-  // Shows once any reload-requiring flag has changed. Developer can switch as
-  // many flags as they need, then hit this once for a single reload.
+  // Shows once any reload-requiring flag changed; hit it once to reload all changes.
   const pendingReloads = new Set<string>();
 
   const reloadBanner = document.createElement('div');
@@ -84,8 +82,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   const keys = Object.keys(DEFAULT_FLAGS) as FlagKey[];
   let firstFocus: HTMLElement | undefined;
 
-  // First option: the Vizbee App ID. It's read at boot by VizbeeService.init,
-  // so a change persists and reloads (like the SDK/build switches).
+  // Vizbee App ID: read at boot by VizbeeService.init, so a change persists and reloads.
   const appIdField = createTextField({
     label: 'Vizbee App ID',
     value: services().config.get().vizbeeAppId,
@@ -98,14 +95,12 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   firstFocus = appIdField;
 
   for (const key of keys) {
-    // npmModule is surfaced through the build-aware "Vizbee SDK" row below;
-    // homeSSOStyle / homeSSOLocale render in the HomeSSO preview section. None
-    // of these is a plain row.
+    // Not plain rows: npmModule uses the "Vizbee SDK" row below; homeSSO* render
+    // in the HomeSSO preview section.
     if (key === 'npmModule' || key === 'homeSSOStyle' || key === 'homeSSOLocale') continue;
 
-    // Build-aware "Vizbee SDK" row: the script build picks the SDK <script>
-    // variant (vizbeeSdk); the npm build picks which bundled module to load
-    // (npmModule → …/es5 vs /es6). Same row + label, different options/flag.
+    // Build-aware "Vizbee SDK" row: script build picks the <script> variant
+    // (vizbeeSdk); npm build picks the bundled module (npmModule → es5 vs es6).
     const optionsKey: FlagKey = key === 'vizbeeSdk' && build === 'npm' ? 'npmModule' : key;
     const current = flags.get(optionsKey);
     const options = FLAG_OPTIONS[optionsKey];
@@ -126,8 +121,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
       });
       initialFocus = firstFocusableOption(row);
     } else {
-      // Toggle path (boolean flags). No boolean flags exist right now, so this
-      // is currently unused — Boolean() keeps it valid for when one is added.
+      // Toggle path (boolean flags). Currently unused — kept valid for future flags.
       row = createToggle({
         label: FLAG_LABELS[key],
         initialValue: Boolean(current),
@@ -142,11 +136,8 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   section.appendChild(sectionTitle);
   section.appendChild(list);
 
-  // Section: HomeSSO modal preview. These toggles drive the HomeSSO SDK's own
-  // sign-in toasts (rendered bottom-right by the SDK) with dummy data, so the
-  // modal UI can be previewed/enhanced without a real paired phone. They are
-  // momentary preview controls — not persisted feature flags. The SDK shows one
-  // toast at a time, so turning one on replaces whatever was showing.
+  // Section: HomeSSO modal preview. Momentary controls (not persisted flags) that
+  // drive the SDK's sign-in toasts with dummy data; one shows at a time.
   const ssoSection = document.createElement('section');
   ssoSection.className = 'settings-section';
 
@@ -157,8 +148,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   const ssoList = document.createElement('div');
   ssoList.className = 'settings-list';
 
-  // Style selector (SDK default vs DAZN) — backed by the persisted homeSSOStyle
-  // flag; HomeSSOService.applyModalConfig() reads it at show time.
+  // Style selector (SDK default vs DAZN) — persisted homeSSOStyle flag, read at show time.
   ssoList.appendChild(
     createRadioGroup({
       label: FLAG_LABELS.homeSSOStyle,
@@ -168,8 +158,7 @@ export function renderSettingsPage(root: HTMLElement): () => void {
     }),
   );
 
-  // Localization (LTR default vs RTL) — backed by the persisted homeSSOLocale
-  // flag; applied at show time via the modal config's `direction`.
+  // Localization (LTR default vs RTL) — persisted homeSSOLocale flag, applied via `direction`.
   ssoList.appendChild(
     createRadioGroup({
       label: FLAG_LABELS.homeSSOLocale,
@@ -215,9 +204,8 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   appendInfo(infoList, 'App', services().config.get().appName);
   appendInfo(infoList, 'App Version', __APP_VERSION__);
   appendInfo(infoList, 'App ID', services().config.get().vizbeeAppId);
-  // Reported by the loaded SDK (window.VZB.VERSION); '—' until it loads / on
-  // desktop. The deployment date (S3 Last-Modified) is fetched async and
-  // appended in brackets, e.g. "7.8.35 (May 27, 2026)".
+  // From the loaded SDK (window.VZB.VERSION); '—' until loaded. Deployment date
+  // (S3 Last-Modified) is fetched async and appended, e.g. "7.8.35 (May 27, 2026)".
   const sdkVersion = window.VZB?.VERSION ?? null;
   const sdkDd = appendInfo(infoList, 'SDK Version', sdkVersion ?? '—');
   if (sdkVersion) {
@@ -225,10 +213,8 @@ export function renderSettingsPage(root: HTMLElement): () => void {
       if (date) sdkDd.textContent = `${sdkVersion} (${date})`;
     });
   }
-  // HomeSSO SDK: version + deployment date (in brackets) + ES variant (which
-  // mirrors the Vizbee SDK selection). Reads window.vizbee.homesso.VERSION;
-  // bundles predating that export report "unknown". '—' before it loads,
-  // "loading…" while registering. Date arrives async (see below).
+  // HomeSSO SDK: version + async deployment date + ES variant. Reads
+  // window.vizbee.homesso.VERSION ("unknown" on older bundles); '—' before load.
   const sso = services().homeSSO.status();
   const buildSsoValue = (date: string | null): string => {
     if (!sso.variant) return '—';
@@ -242,17 +228,14 @@ export function renderSettingsPage(root: HTMLElement): () => void {
       if (date) ssoDd.textContent = buildSsoValue(date);
     });
   }
-  // HomeSSO account (app-owned state). Live-updates if the user signs in/out
-  // (e.g. a phone completes sign-in, or Sign out on the Profile page) while
-  // Settings is open.
+  // HomeSSO account (app-owned state). Live-updates on sign in/out while Settings is open.
   const accountValue = (state = services().homeSSO.authState()): string =>
     state.account ? `Signed in as ${state.account.login}` : 'Not signed in';
   const accountDd = appendInfo(infoList, 'HomeSSO Account', accountValue());
   const offAuth = services().homeSSO.onAuthChange((state) => {
     accountDd.textContent = accountValue(state);
   });
-  // Which build is actually running, where it loaded from, and when it was
-  // built — so "deployed one, launched another" is verifiable at a glance.
+  // Which build is running, where it loaded from, and when it was built.
   appendInfo(infoList, 'Build', buildLabel(info.platform));
   appendInfo(infoList, 'Source', `${window.location.origin}${window.location.pathname}`);
   appendInfo(infoList, 'Built', __BUILD_TIME__);
@@ -291,10 +274,8 @@ export function renderSettingsPage(root: HTMLElement): () => void {
   };
 }
 
-// The script and npm builds are separate apps at different hosted URLs, so
-// switching means reloading into the other URL (not an in-place reload). Only
-// possible when hosted on webOS/Tizen; off-device buildUrl() returns null and
-// the selection just persists for the next hosted launch (applied at boot).
+// Script and npm builds are separate hosted apps, so switching redirects (hosted
+// webOS/Tizen only); elsewhere targetUrl() is null and the choice just persists.
 function promptBuildSwitch(value: string): void {
   // Switching to npm lands on the currently-selected module folder (es5/es6).
   const target = targetUrl(
@@ -330,8 +311,7 @@ function promptModuleSwitch(value: string): void {
   });
 }
 
-// Returns the value cell so callers can patch it later (e.g. appending an
-// SDK deployment date once its async fetch resolves).
+// Returns the value cell so callers can patch it later (e.g. async SDK date).
 function appendInfo(parent: HTMLElement, label: string, value: string): HTMLElement {
   const dt = document.createElement('dt');
   dt.textContent = label;

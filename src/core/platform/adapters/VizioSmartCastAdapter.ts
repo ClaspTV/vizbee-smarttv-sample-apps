@@ -4,18 +4,8 @@ import { Logger } from '@/services/logger/Logger';
 const VIZIO_READY_EVENT = 'VIZIO_LIBRARY_DID_LOAD';
 const VIZIO_READY_TIMEOUT_MS = 5000;
 
-// Detect VizioSmartCast strictly via window.VIZIO. The companion library
-// <script> is injected into index.html by the Vizio build (see
-// vite.config.ts → vizioCompanionScript plugin); here we just wait for it
-// to populate window.VIZIO and fire VIZIO_LIBRARY_DID_LOAD.
-//
-// Graceful degradation: if the lib never shows up — the common case when a
-// Vizio build is opened in a desktop browser for testing, since the lib
-// URL only resolves on the TV's own loopback — we resolve with a warning
-// instead of rejecting. The app boots without Vizio-specific features;
-// every site that calls into window.VIZIO already uses optional chaining
-// and a window.close() fallback (see exit() below). Hard-rejecting here
-// would block dev-on-desktop testing of Vizio-targeted builds.
+// Waits for the Vizio companion library (window.VIZIO / VIZIO_LIBRARY_DID_LOAD).
+// If it never loads (e.g. desktop), resolves with a warning so the app still boots.
 export class VizioSmartCastAdapter implements PlatformAdapter {
   readonly name: PlatformName = 'viziosmartcast';
   private readonly log = new Logger('VizioSmartCastAdapter');

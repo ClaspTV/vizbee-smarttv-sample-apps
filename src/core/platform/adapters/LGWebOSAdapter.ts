@@ -1,9 +1,7 @@
 import { PlatformAdapter, DeviceInfo, PlatformName } from '../PlatformAdapter';
 
-// LG webOS. The webOS build injects LG's webOSTV.js (see vite.config.ts), which
-// defines window.webOS.service.request — the PalmServiceBridge wrapper the Vizbee
-// SDK needs to read device info. window.webOSSystem.deviceInfo (model/version) is
-// also injected by the webOS app container; we surface it in Settings → Device.
+// LG webOS. The build injects webOSTV.js (PalmServiceBridge wrapper the Vizbee
+// SDK needs) and the container injects window.webOSSystem.deviceInfo.
 export class LGWebOSAdapter implements PlatformAdapter {
   readonly name: PlatformName = 'webos';
 
@@ -30,8 +28,7 @@ export class LGWebOSAdapter implements PlatformAdapter {
   }
 
   exit(): void {
-    // webOS apps typically use the platformBack / luna service to exit; for the
-    // sample, window.close() is sufficient for both webOS native and web.
+    // window.close() is sufficient for both webOS native and web in this sample.
     window.close();
   }
 

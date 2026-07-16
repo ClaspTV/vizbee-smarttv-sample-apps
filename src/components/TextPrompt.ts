@@ -9,13 +9,8 @@ export interface TextPromptOptions {
   onCancel?: () => void;
 }
 
-// Modal text editor for TV. Reliable text entry without depending on the
-// on-screen-keyboard's blur/enter quirks: an <input> (auto-focused → the TV
-// IME opens) plus explicit Save / Cancel buttons. While the input is focused,
-// RemoteKeyService ignores it so typing works; once the IME closes (input
-// blurs) focus moves to Save, so there's always a clear way to commit. The
-// capture owns the remote, so LEFT/RIGHT move between buttons, ENTER activates,
-// BACK cancels. Reuses the .confirm-overlay / .confirm-dialog styles.
+// Modal TV text editor: auto-focused <input> (opens IME) + Save/Cancel buttons.
+// RemoteKeyService bypasses the input so typing works; reuses .confirm-* styles.
 export function showTextPrompt(opts: TextPromptOptions): void {
   const prevActive = document.activeElement as HTMLElement | null;
 
@@ -86,8 +81,8 @@ export function showTextPrompt(opts: TextPromptOptions): void {
     opts.onCancel?.();
   };
 
-  // Owns the remote — but only actually fires when the input is NOT focused
-  // (a focused input is bypassed by RemoteKeyService), i.e. when on the buttons.
+  // Owns the remote, but only fires when the input is NOT focused
+  // (a focused input is bypassed by RemoteKeyService), i.e. on the buttons.
   const release = services().remoteKeys.capture(({ action }) => {
     switch (action) {
       case 'LEFT':
@@ -129,8 +124,7 @@ export function showTextPrompt(opts: TextPromptOptions): void {
       paint();
     }
   });
-  // When the on-screen keyboard closes (input blurs), surface Save so there's
-  // always a visible, focusable way to commit.
+  // When the on-screen keyboard closes (input blurs), surface Save.
   input.addEventListener('blur', () => {
     if (!closed) paint();
   });
@@ -138,7 +132,7 @@ export function showTextPrompt(opts: TextPromptOptions): void {
   cancelBtn.addEventListener('click', cancel);
 
   document.body.appendChild(overlay);
-  // Focus the input first → opens the TV on-screen keyboard / lets desktop type.
+  // Focus the input first: opens the TV keyboard / lets desktop type.
   input.focus();
   input.select();
 }

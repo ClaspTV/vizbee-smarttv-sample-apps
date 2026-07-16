@@ -20,12 +20,8 @@ export class EventEmitter<EventMap extends Record<string, unknown>> {
   emit<K extends keyof EventMap>(event: K, payload: EventMap[K]): void {
     const set = this.listeners[event];
     if (!set) return;
-    // Iterate a snapshot: a listener subscribed by another listener *during*
-    // this emit must NOT receive the in-flight event (Set.forEach would visit
-    // it, per spec). This matters when a BACK handler navigates and the new
-    // page synchronously subscribes its own BACK handler — without the snapshot
-    // it would catch the same BACK and, e.g., pop the exit dialog. Also skip
-    // listeners removed mid-emit.
+    // Iterate a snapshot so listeners subscribed during this emit don't receive
+    // the in-flight event, and skip listeners removed mid-emit.
     for (const listener of Array.from(set)) {
       if (!set.has(listener)) continue;
       try {

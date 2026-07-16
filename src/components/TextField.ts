@@ -8,9 +8,8 @@ export interface TextFieldOptions {
   onCommit: (value: string) => void;
 }
 
-// A focusable settings row showing a label + current value. ENTER (or click)
-// opens a modal editor (showTextPrompt) with an explicit Save — reliable text
-// entry on TV, where the on-screen keyboard makes inline editing fiddly.
+// Focusable settings row (label + value). ENTER/click opens a modal editor
+// with an explicit Save — reliable text entry on TV.
 export function createTextField(opts: TextFieldOptions): HTMLElement {
   let value = opts.value;
 
@@ -43,8 +42,7 @@ export function createTextField(opts: TextFieldOptions): HTMLElement {
     });
   };
 
-  // ENTER on the focused row → open the editor. (Scoped to this row's wrapper,
-  // so it won't cross-fire with other ENTER subscribers.)
+  // ENTER on the focused row opens the editor (scoped to this wrapper).
   const off = services().remoteKeys.on(({ action }) => {
     if (action === 'ENTER' && document.activeElement === wrapper) edit();
   });

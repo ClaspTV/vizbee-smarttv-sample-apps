@@ -1,10 +1,7 @@
 import { addLogSink, LogEntry } from '@/services/logger/Logger';
 
-// ⚠️ Set these to publish the app's logs to a PubNub channel. Leave any blank
-// to disable (the sink no-ops). This is the app's own remote logging — separate
-// from the Vizbee SDK's enableRemoteLogging, which is config-driven on the SDK
-// side. Subscribe to `channel` from your machine (PubNub debug console / SDK)
-// to watch a device's logs live.
+// ⚠️ Set these to publish the app's logs to a PubNub channel; leave any blank to
+// disable. This is the app's own remote logging, separate from the Vizbee SDK's.
 export interface PubNubLogConfig {
   publishKey: string;
   subscribeKey: string;
@@ -21,9 +18,8 @@ const FLUSH_MS = 1500; // batch window — PubNub rate-limits, so don't publish 
 const MAX_BATCH = 25;
 const MAX_LINE = 500;
 
-// Publishes log lines to a PubNub channel via the REST publish API. Batches to
-// stay under rate limits. Wired to Debug mode (see main.ts): start() on, stop()
-// off. No-ops unless all three config values are set.
+// Publishes log lines to a PubNub channel via the REST publish API, batched to
+// stay under rate limits. No-ops unless all three config values are set.
 export class PubNubLogger {
   private off: (() => void) | null = null;
   private buffer: string[] = [];
@@ -78,8 +74,8 @@ export class PubNubLogger {
       `/${encodeURIComponent(subscribeKey)}/0/${encodeURIComponent(channel)}/0` +
       `?uuid=${encodeURIComponent(this.uuid)}`;
     try {
-      // XHR POST (message in body) — widely supported on older TV engines, and
-      // POST avoids the URL-length limit a GET publish would hit when batching.
+      // XHR POST (message in body): widely supported on older TV engines, and
+      // avoids the URL-length limit a GET publish would hit when batching.
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
@@ -90,8 +86,7 @@ export class PubNubLogger {
   }
 }
 
-// Stable per-install id so a channel can carry multiple devices' logs and you
-// can tell them apart.
+// Stable per-install id so one channel can carry (and distinguish) multiple devices.
 function getUuid(): string {
   try {
     let id = localStorage.getItem('vsw.log.uuid');

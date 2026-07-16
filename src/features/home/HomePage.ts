@@ -4,18 +4,16 @@ import { createFocusableButton } from '@/components/FocusableButton';
 import { showConfirmDialog } from '@/components/ConfirmDialog';
 import { services } from '@/services/ServiceContainer';
 
-// Layout: full-bleed hero (mirrors the focused card) + horizontal carousel.
-// As the user moves focus across cards, the hero updates to reflect the
-// currently-focused video — so the hero is a "preview" of the focused tile.
+// Layout: full-bleed hero + horizontal carousels. The hero previews whichever
+// card is currently focused.
 export function renderHomePage(root: HTMLElement): () => void {
   root.innerHTML = '';
 
   const page = document.createElement('div');
   page.className = 'home-page';
 
-  // Hero shell — content is filled in by updateHero(). One hidden ref to
-  // the currently-featured video lets the Play button stay correct as the
-  // hero swaps.
+  // Hero shell — filled by updateHero(). `featured` tracks the current video so
+  // the Play button stays correct as the hero swaps.
   let featured: VideoInfo = VIDEOS[0];
 
   const hero = document.createElement('section');
@@ -70,17 +68,13 @@ export function renderHomePage(root: HTMLElement): () => void {
   heroTitle.textContent = featured.title;
   heroDesc.textContent = featured.description;
 
-  // Rails. Two stacked horizontal carousels demonstrate the multi-row
-  // pattern: as the user moves DOWN, the page scrolls to center the focused
-  // row (FocusManager.setFocus → scrollIntoView 'center'). For a real
-  // catalog you'd render one rail per category from your data layer.
+  // Rails. Two stacked carousels demonstrate the multi-row pattern; moving DOWN
+  // scrolls the focused row into view. A real catalog would render one per category.
   const renderRail = (title: string): HTMLElement => {
     const section = document.createElement('section');
     section.className = 'rail';
-    // FocusManager uses this to anchor vertical scroll to the rail's top
-    // (instead of centering the focused card). Result: when focus moves
-    // into a rail, that rail snaps to the top of the rails area and the
-    // previous rail scrolls fully out — no half-visible card edges.
+    // Anchors vertical scroll to the rail's top (not the focused card), so the
+    // rail snaps to the top of the rails area with no half-visible card edges.
     section.setAttribute('data-scroll-anchor', '');
 
     const railTitle = document.createElement('h2');
@@ -95,8 +89,7 @@ export function renderHomePage(root: HTMLElement): () => void {
         video: v,
         onActivate: (video) => services().router.navigate(`/player/${video.id}`),
       });
-      // Native DOM focus is dispatched by FocusManager.setFocus() (which
-      // calls el.focus()). Listening here keeps HomePage decoupled from it.
+      // Listening to native focus (fired by FocusManager) keeps HomePage decoupled.
       card.addEventListener('focus', () => updateHero(v));
       railTrack.appendChild(card);
     }
@@ -106,9 +99,7 @@ export function renderHomePage(root: HTMLElement): () => void {
     return section;
   };
 
-  // Hero stays fixed at the top; only the rails area scrolls. As focus moves
-  // between cards, the hero updates to reflect the focused video — but it
-  // never moves out of view.
+  // Hero stays fixed at the top; only the rails area scrolls.
   const railsArea = document.createElement('div');
   railsArea.className = 'home-page__rails';
   railsArea.appendChild(renderRail('Continue exploring'));
@@ -121,8 +112,7 @@ export function renderHomePage(root: HTMLElement): () => void {
   // Initial focus on the hero CTA.
   services().focus.setFocus(playBtn);
 
-  // BACK on Home is the app's root exit point — confirm first so an accidental
-  // press doesn't drop the user out. Defaults focus to "Stay" for safety.
+  // BACK on Home is the root exit point — confirm first, defaulting focus to "Stay".
   const offBack = services().remoteKeys.on(({ action }) => {
     if (action !== 'BACK') return;
     showConfirmDialog({

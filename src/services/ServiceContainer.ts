@@ -8,10 +8,8 @@ import { FocusManager } from '@/core/navigation/FocusManager';
 import { LifecycleManager } from '@/core/lifecycle/LifecycleManager';
 import { Router } from '@/app/Router';
 
-// Service Locator: one container holds the wired-up dependency graph.
-// Pages/components ask the container for what they need rather than
-// constructing services themselves. Easy to swap implementations under test
-// (e.g. inject a fake VizbeeService) without touching call sites.
+// Service Locator: one container holds the wired-up dependency graph, so pages
+// ask for services rather than constructing them (easy to fake in tests).
 export interface Services {
   config: ConfigService;
   flags: FeatureFlagService;

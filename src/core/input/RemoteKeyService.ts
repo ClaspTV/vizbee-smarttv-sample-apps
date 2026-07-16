@@ -9,9 +9,8 @@ type RemoteEvents = {
 
 type CaptureHandler = (e: RemoteEvents['action']) => void;
 
-// One global keydown listener; translates to logical actions and broadcasts.
-// Components subscribe to actions, never to raw keycodes — keeps platform
-// quirks isolated to keymaps.ts.
+// One global keydown listener; translates keycodes to logical actions and
+// broadcasts. Components subscribe to actions, never raw keycodes.
 export class RemoteKeyService {
   private readonly emitter = new EventEmitter<RemoteEvents>();
   private readonly keymap: Record<number, RemoteAction>;
@@ -39,11 +38,8 @@ export class RemoteKeyService {
     return this.emitter.on('action', listener);
   }
 
-  // Exclusive input capture for modal overlays. While a handler is active it
-  // receives every action and normal on(...) subscribers (FocusManager, pages)
-  // get nothing — so a modal owns the remote and BACK/ENTER never leak to the
-  // page behind it. Stacks, so nested overlays restore the prior owner on
-  // release. Returns an idempotent release fn.
+  // Exclusive input capture for modal overlays: the active handler receives every
+  // action, on(...) subscribers get none. Stacks; returns an idempotent release fn.
   capture(handler: CaptureHandler): () => void {
     this.captureStack.push(handler);
     let released = false;
@@ -55,10 +51,8 @@ export class RemoteKeyService {
     };
   }
 
-  // Inject a logical action that didn't come from a keydown. webOS delivers
-  // the remote BACK button as a history popstate rather than a key event, so
-  // HardwareBackButton routes it here. Goes through the same capture stack as
-  // real keys, so modals still intercept it.
+  // Inject a logical action not from a keydown (e.g. webOS BACK via popstate).
+  // Goes through the same capture stack as real keys, so modals still intercept it.
   dispatch(action: RemoteAction, originalEvent?: KeyboardEvent): void {
     const payload = { action, originalEvent: originalEvent ?? new KeyboardEvent('keydown') };
     const captured = this.captureStack[this.captureStack.length - 1];
@@ -71,11 +65,8 @@ export class RemoteKeyService {
   }
 
   private handleKey = (e: KeyboardEvent): void => {
-    // Let editable elements own their keys (text typing, backspace, cursor, and
-    // the TV on-screen keyboard). Components that edit text put the field into
-    // an explicit "editing" state and exit it on ENTER/BACK, so we never get
-    // stuck — see TextField. Without this, e.g. Backspace (mapped to BACK)
-    // would never delete a character.
+    // Let editable elements own their keys (typing, backspace, cursor, on-screen
+    // keyboard); otherwise Backspace (mapped to BACK) could never delete a char.
     const el = e.target as HTMLElement | null;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
       return;

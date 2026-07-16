@@ -1,9 +1,5 @@
-// Three public HLS test streams. TV browsers (Tizen, webOS, Roku) and
-// Safari/iOS/tvOS play HLS natively via <video src>; desktop Chrome/
-// Firefox/Edge get an HLS.js shim that PlayerPage lazy-loads from a CDN.
-//
-// Posters are Picsum placeholders (always-on, deterministic per seed) —
-// swap for real artwork URLs in your CDN when productionizing.
+// Public HLS test streams. TVs/Safari play HLS natively; desktop browsers
+// use an HLS.js shim PlayerPage lazy-loads. Posters are Picsum placeholders.
 
 export interface VideoInfo {
   id: string;
@@ -50,9 +46,8 @@ export const VIDEOS: readonly VideoInfo[] = [
   },
 ];
 
-// Videos that arrive at runtime (e.g. a Vizbee cast/deeplink from mobile) won't
-// be in the static catalog. We register them here so the player can resolve
-// them by id just like catalog entries.
+// Videos arriving at runtime (e.g. a Vizbee cast/deeplink) aren't in the
+// static catalog; register them here so the player can resolve them by id.
 const dynamicVideos = new Map<string, VideoInfo>();
 
 export function registerVideo(video: VideoInfo): void {

@@ -3,13 +3,8 @@ import { showConfirmDialog } from '@/components/ConfirmDialog';
 import { services } from '@/services/ServiceContainer';
 import type { AuthState } from '@/services/homesso/HomeSSOAuthStore';
 
-// Profile page. Renders the HomeSSO account state owned by the app (the SDK
-// doesn't persist the user) and offers sign-out. When signed out it explains
-// the mobile sign-in flow and, while a sign-in is underway, shows the reg code
-// the user enters on their phone. Sign-in itself is phone-driven — no on-TV button.
-//
-// The page subscribes to HomeSSOService.onAuthChange and rebuilds in place, so
-// it reflects sign-in/sign-out (and the in-flight reg code) live.
+// Profile page: renders app-owned HomeSSO account state (sign-out) or the sign-in
+// explainer when signed out. Subscribes to onAuthChange and rebuilds in place.
 export function renderProfilePage(root: HTMLElement): () => void {
   root.innerHTML = '';
 
@@ -151,8 +146,7 @@ function renderSignedOut(body: HTMLElement, state: AuthState): HTMLElement | nul
   head.appendChild(identity);
   card.appendChild(head);
 
-  // In-flight reg code (a sign-in is underway) — what the user enters on their
-  // phone. Present only while HomeSSOService reports a pending sign-in.
+  // In-flight reg code the user enters on their phone; shown only while a sign-in is pending.
   if (state.pending) {
     const reg = document.createElement('div');
     reg.className = 'profile-regcode';

@@ -4,18 +4,8 @@ import { fetchSdkDeploymentDate } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
 import { HomeSSOAuthStore, type AuthState, type HomeSSOAccount } from './HomeSSOAuthStore';
 
-// The HomeSSO SDK is loaded as an external <script>, same model as the main
-// Vizbee SDK (VizbeeService). It's a side-effect bundle that self-registers
-// window.vizbee.homesso once window.vizbee exists — otherwise it waits for the
-// VIZBEE_SDK_READY event that the main SDK fires.
-//
-// ES5/ES6 follows the Vizbee SDK selection via the `vizbeeSdk` flag's es5/es6
-// suffix. HomeSSO ships only script variants, so npm app builds map to the
-// script variant too (not the npmModule split) — for now. The origin host
-// follows the `sdkEnv` flag (dev/qa/prod), same as the continuity SDK — see
-// services/sdkEnv.ts. URL scheme mirrors the continuity SDK: the variant is an
-// explicit path segment and `v1` is the major pointer that tracks the latest
-// HomeSSO release (currently v1.0.1) — see @vizbeetv/homesso-sdk.
+// The HomeSSO SDK is an external side-effect <script> that self-registers
+// window.vizbee.homesso. ES variant follows `vizbeeSdk`; origin follows `sdkEnv`.
 const HOMESSO_SDK_MAJOR = 'v1';
 
 type EsVariant = 'es5' | 'es6';
@@ -36,12 +26,8 @@ const PREVIEW_SIGN_IN_TYPE = 'preview-signin';
 // (email, mvpd, …) from the mobile sender; this sample uses one.
 const DEFAULT_SIGN_IN_TYPE = 'email';
 
-// Vizbee HomeSSO device-code backend (same contract the Roku sample uses):
-//   POST /v1/accountregcode        { deviceId }            → { code }
-//   POST /v1/accountregcode/poll   { deviceId, regCode }   → { status, authToken, email }
-//   POST /v1/signout               {}  + Authorization     → (ignored)
-// The TV issues a reg code, relays it to the phone via the SDK's progress
-// toast, then polls until the phone completes sign-in (status === 'done').
+// Vizbee HomeSSO device-code backend (endpoints: /accountregcode, /poll,
+// /signout). TV issues a reg code, relays it to the phone, polls until done.
 const HOMESSO_API_BASE = 'https://homesso.vizbee.tv/v1';
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 90_000;
@@ -49,22 +35,8 @@ const POLL_TIMEOUT_MS = 90_000;
 // "roku:<channelClientId>". Persisted so reg-code issuance and polling agree.
 const DEVICE_ID_KEY = 'vsw.homesso.deviceId';
 
-// Two toast styles selectable in Settings (the `homeSSOStyle` flag):
-//
-//  - DAZN: border + box-shadow + spacing matched to the DAZN HomeSSO mockups —
-//    accent-green border/glow, more breathing room inside the card (padding),
-//    inset from the screen corner (edgeMargin → the toast's bottom/right
-//    offset), and rounded corners (borderRadius). NOTE: explicit px values
-//    bypass the SDK's screen-scaling, so they're calibrated to the 1920×1080
-//    design reference (the common TV resolution).
-//
-//  - DEFAULT: every key set to null so the SDK falls back to its built-in
-//    look. The snackbar reads each option as `options?.x || <scaled default>`,
-//    so null resets it; the SDK's deepMerge skips `undefined` but honours
-//    `null`, which is why we reset with null rather than undefined.
-//
-// Both objects carry the same keys so switching one way fully overrides the
-// other (setCommonModalConfig merges into a persisted singleton).
+// Two toast styles via the `homeSSOStyle` flag: DAZN (border/glow/spacing from
+// the DAZN mockups) and DEFAULT (keys reset so the SDK uses its built-in look).
 const DAZN_STYLE = {
   borderColor: '#1ed679',
   borderWidth: '1px',
@@ -82,15 +54,8 @@ const DEFAULT_STYLE = {
   borderRadius: undefined,
 };
 
-// Per-modal preview strings (the `homeSSOLocale` flag). The SDK's localization
-// feature handles layout direction only (LTR vs RTL); the *text* is the
-// integrator's responsibility. So the RTL option swaps in Arabic to demonstrate
-// genuine right-to-left rendering — right-aligned, words flowing R→L — rather
-// than English text that merely right-aligns. The `ltr` strings mirror the
-// SDK's English defaults so switching back restores the out-of-box copy
-// (deepMerge needs the explicit string; it skips `undefined`). Progress has no
-// title in either language. Applied via the per-modal config setters since the
-// three modals carry different text.
+// Per-modal preview strings (`homeSSOLocale` flag). The SDK localizes layout
+// direction only; RTL swaps in Arabic, LTR mirrors the SDK's English defaults.
 type ModalText = { titleText?: string; descriptionText: string };
 const PREVIEW_TEXT: Record<
   'ltr' | 'rtl',
@@ -120,15 +85,8 @@ const PREVIEW_TEXT: Record<
   },
 };
 
-// Bridges the sample app to the HomeSSO SDK. Two responsibilities:
-//   1. The REAL sign-in flow — wireRealFlow() registers setSignInInfoGetter /
-//      setSignInHandler and calls init() (on TV platforms where the continuity
-//      session exists). Incoming mobile sign-in requests run the device-code
-//      flow against homesso.vizbee.tv (reg code → poll → success), backed by the
-//      app-owned HomeSSOAuthStore. Sign-out clears state and calls /v1/signout.
-//   2. Modal preview — showInformational/Progress/Success/hide trigger the SDK's
-//      toasts with dummy data so the modal UI can be styled in Settings without a
-//      paired phone. These don't touch the account.
+// Bridges the sample app to the HomeSSO SDK: the real device-code sign-in flow
+// (wireRealFlow + HomeSSOAuthStore) and the dummy-data modal preview in Settings.
 export class HomeSSOService {
   private readonly log = new Logger('HomeSSOService');
   private initialized = false;
@@ -139,9 +97,8 @@ export class HomeSSOService {
   private loadedUrl: string | null = null;
   private deploymentDatePromise: Promise<string | null> | null = null;
 
-  // App-owned account state. The SDK doesn't persist the user or expose a
-  // current-user getter — this store is the source of truth for both the SDK's
-  // sign-in-info getter and the Profile page. See HomeSSOAuthStore.
+  // App-owned account state (the SDK doesn't persist the user); source of truth
+  // for the sign-in-info getter and the Profile page. See HomeSSOAuthStore.
   private readonly auth = new HomeSSOAuthStore();
 
   // Bumped on each sign-in request; the poll loop stops when its captured
@@ -153,10 +110,8 @@ export class HomeSSOService {
     if (this.initialized) return;
     this.initialized = true;
 
-    // On the TV platforms the main Vizbee SDK provides window.vizbee (and fires
-    // VIZBEE_SDK_READY), so the homesso script sets itself up off that. On
-    // desktop there is no main SDK, so stub window.vizbee — the toast UI needs
-    // no continuity session, only the homesso namespace to exist.
+    // On TV the main Vizbee SDK provides window.vizbee; on desktop there's none,
+    // so stub it — the toast UI needs only the homesso namespace, no continuity.
     if (services().platform.name === 'desktop' && !window.vizbee) {
       // Desktop has no continuity SDK; stub a minimal object so the homesso
       // namespace has somewhere to attach. Cast past the full SDK type.
@@ -183,10 +138,7 @@ export class HomeSSOService {
     this.log.info('HomeSSO SDK ready', { variant: this.variant, version: this.version });
 
     // Wire the real sign-in flow only when the continuity SDK is present —
-    // manager.init() connects to the continuity session (VizbeeBicastSession
-    // manager) and throws without window.vizbee.continuity. On desktop (stubbed
-    // window.vizbee) and any build without continuity, the real flow is skipped;
-    // the Settings modal preview still works (no sign-in path).
+    // manager.init() needs the continuity session. Otherwise preview-only.
     if (window.vizbee?.continuity) {
       this.wireRealFlow();
     } else {
@@ -194,10 +146,8 @@ export class HomeSSOService {
     }
   }
 
-  // Register the app's sign-in-info getter + request handler with the SDK and
-  // open the continuity session. Uses the manager directly (NOT this.manager(),
-  // which installs a no-op messaging shim for the preview path) so the real
-  // session's messaging client is the one that talks to the mobile sender.
+  // Register the sign-in-info getter + handler and open the continuity session.
+  // Uses the manager directly (not this.manager(), which shims messaging).
   private wireRealFlow(): void {
     const ctx = window.vizbee?.homesso?.HomeSSOContext?.getInstance?.();
     const m = ctx?.getHomeSSOManager?.();
@@ -218,28 +168,22 @@ export class HomeSSOService {
     }
   }
 
-  // Snapshot for Settings → Device: which ES variant was loaded (mirrored from
-  // the Vizbee SDK selection), the SDK version (null on bundles that predate
-  // the VERSION export), and whether the SDK finished registering.
+  // Snapshot for Settings → Device: loaded ES variant, SDK version (null on
+  // older bundles), and whether the SDK finished registering.
   status(): { ready: boolean; variant: EsVariant | null; version: string | null } {
     return { ready: this.ready, variant: this.variant, version: this.version };
   }
 
-  // The deployment date (S3 Last-Modified) of the loaded HomeSSO bundle, shown
-  // next to the version in Settings → Device. Memoised; null until the SDK
-  // script URL is known, or if the header can't be read.
+  // Deployment date (S3 Last-Modified) of the loaded HomeSSO bundle for Settings
+  // → Device. Memoised; null until the URL is known or if the header is absent.
   deploymentDate(): Promise<string | null> {
     if (!this.loadedUrl) return Promise.resolve(null);
     this.deploymentDatePromise ??= fetchSdkDeploymentDate(this.loadedUrl);
     return this.deploymentDatePromise;
   }
 
-  // Apply the Settings-selected toast config via the UI manager:
-  //  - style: DAZN vs the SDK's default look (`homeSSOStyle` flag);
-  //  - localization: LTR vs RTL layout (`homeSSOLocale` flag → `direction`).
-  // setCommonModalConfig merges into every modal type, so one call configures
-  // the informational, progress and success toasts alike. Called before each
-  // show() so the toast always reflects the current flags.
+  // Apply the Settings-selected toast config (style via `homeSSOStyle`, LTR/RTL
+  // via `homeSSOLocale`) to all modal types. Called before each show().
   private applyModalConfig(): void {
     const ui = window.vizbee?.homesso?.HomeSSOContext?.getInstance?.()?.getHomeSSOUIManager?.();
     if (!ui?.setCommonModalConfig) {
@@ -251,14 +195,8 @@ export class HomeSSOService {
     const rtl = flags.get('homeSSOLocale') === 'rtl';
     ui.setCommonModalConfig({ ...style, direction: rtl ? 'rtl' : 'ltr' });
 
-    // Localized strings to match the direction: Arabic for RTL so the words
-    // actually flow right-to-left, the SDK's English defaults for LTR. The three
-    // modals carry different text, so set each via its own config setter.
-    // CAVEAT: the SDK's VizbeeHomeSSOManager.updateSuccessUI() re-hardcodes the
-    // English success title/description on every onSuccess, clobbering this
-    // success override — so the success toast stays English until that SDK
-    // method is fixed to respect setSuccessSignInModalConfig (informational and
-    // progress localize correctly). The call is kept so it works once it is.
+    // Localized strings per direction (Arabic for RTL), set per modal. CAVEAT:
+    // the SDK re-hardcodes the English success text, so success stays English.
     const text = rtl ? PREVIEW_TEXT.rtl : PREVIEW_TEXT.ltr;
     ui.setInformationalSignInModalConfig?.(text.informational);
     ui.setProgressSignInModalConfig?.(text.progress);
@@ -266,9 +204,7 @@ export class HomeSSOService {
   }
 
   // --- Modal preview controls ------------------------------------------------
-  // Each method drives the SDK's *real* UI code path (VizbeeHomeSSOManager →
-  // VizbeeSnackbar), only with dummy data. The toasts render bottom-right, as
-  // the SDK ships them; positioning is intentionally left to the SDK.
+  // Each method drives the SDK's real UI code path with dummy data.
 
   // "Please use your mobile app to complete the sign in process." Shown by
   // onProgress when the remote is not yet signed in (isRemoteSignedIn=false).
@@ -292,9 +228,8 @@ export class HomeSSOService {
     m.onProgress(new msgs.ProgressStatus(PREVIEW_SIGN_IN_TYPE, { regcode: 'DEMO-1234' }));
   }
 
-  // "Mobile Sign In Successful!" — auto-dismisses after the SDK's success
-  // duration (~10s). customData.email is required for the SDK to treat it as a
-  // real success in the full flow; harmless here.
+  // "Mobile Sign In Successful!" — auto-dismisses (~10s). customData.email is
+  // required for the SDK to treat it as a real success; harmless here.
   showSuccess(): void {
     const m = this.manager();
     const msgs = this.messages();
@@ -312,8 +247,7 @@ export class HomeSSOService {
   }
 
   // --- Account state (app-owned) ---------------------------------------------
-  // The SDK doesn't store the user or emit state events; these expose our auth
-  // store to the Profile page and Settings device line.
+  // The SDK doesn't store the user; these expose our auth store to Profile/Settings.
 
   authState(): AuthState {
     return this.auth.get();
@@ -327,9 +261,8 @@ export class HomeSSOService {
     return this.auth.onChange(listener);
   }
 
-  // Sign out the current account: drop local state, stop any in-flight poll,
-  // and tell the HomeSSO backend (Authorization: authToken). The SDK has no
-  // sign-out API — the app owns the session.
+  // Sign out: drop local state, stop any in-flight poll, and notify the backend.
+  // The SDK has no sign-out API — the app owns the session.
   signOut(): void {
     const account = this.auth.get().account;
     this.signInGeneration++; // supersede any active poll
@@ -339,12 +272,8 @@ export class HomeSSOService {
 
   // --- Sign-in flow (Vizbee HomeSSO device-code backend) ---------------------
 
-  // The handler registered with setSignInHandler: invoked when a paired mobile
-  // sender requests sign-in over the continuity session. signInInfo =
-  // { isSignedIn, signInType, deviceId, deviceType, customData }. statusCallback
-  // routes through the SDK (updates the toast AND notifies the sender). The flow
-  // mirrors the Roku sample's VizbeeHomeSSOSignInAdapter: issue a reg code, relay
-  // it via the progress toast, poll until the phone completes the sign-in.
+  // Handler for setSignInHandler: invoked when a mobile sender requests sign-in.
+  // Issues a reg code, relays it via the toast, polls until the phone completes.
   private handleSignIn(signInInfo: any, statusCallback: (status: any) => void): void {
     const signInType: string = signInInfo?.signInType || DEFAULT_SIGN_IN_TYPE;
     this.log.info('HomeSSO sign-in request received', {
@@ -404,9 +333,8 @@ export class HomeSSOService {
     return data?.code ?? null;
   }
 
-  // POST /v1/accountregcode/poll { deviceId, regCode } every POLL_INTERVAL_MS
-  // until { status: 'done', authToken, email } or POLL_TIMEOUT_MS elapses.
-  // Returns null on timeout or if this poll was superseded.
+  // Poll POST /v1/accountregcode/poll every POLL_INTERVAL_MS until done or
+  // POLL_TIMEOUT_MS. Returns null on timeout or if superseded.
   private async pollForSignIn(
     regcode: string,
     generation: number,
@@ -482,10 +410,8 @@ export class HomeSSOService {
       this.log.warn('HomeSSO manager unavailable; SDK not ready');
       return null;
     }
-    // onProgress/onSuccess/onFailure first call vizbeeMessagingClient.send() to
-    // notify the mobile sender — which throws with no paired phone. Inject a
-    // no-op client once so the code reaches the toast-rendering step.
-    // Cast to any because vizbeeMessagingClient is private in the SDK class.
+    // onProgress/onSuccess/onFailure call vizbeeMessagingClient.send() first,
+    // which throws with no paired phone; inject a no-op client so the toast renders.
     if (!this.shimmed) {
       (m as any).vizbeeMessagingClient = (m as any).vizbeeMessagingClient ?? { send: () => {}, addReceiver: () => {} };
       this.shimmed = true;
@@ -514,9 +440,8 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-// The script's onload fires before it has finished registering its namespace
-// (and on TV it may still be waiting for VIZBEE_SDK_READY), so poll with a
-// short backoff for window.vizbee.homesso to appear.
+// onload fires before the namespace is registered (and TV may await
+// VIZBEE_SDK_READY), so poll with a short backoff for window.vizbee.homesso.
 async function waitForHomeSSO(maxAttempts = 40, initialDelay = 100): Promise<boolean> {
   let delay = initialDelay;
   for (let i = 0; i < maxAttempts; i++) {

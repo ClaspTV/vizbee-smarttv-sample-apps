@@ -1,8 +1,5 @@
-// Entry point. Boot order:
-//   1. Detect platform → adapter
-//   2. Await platform readiness (Vizio companion lib, etc.)
-//   3. Wire services into the container
-//   4. Start router → first page renders
+// Entry point. Boot order: detect platform → await readiness →
+// wire services → start router (first page renders).
 
 import './styles/reset.css';
 import './styles/tokens.css';
@@ -45,9 +42,8 @@ async function boot(): Promise<void> {
   // Sample app: log everything — all debug traces are useful for integration work.
   setLogLevel('debug');
 
-  // If a different app build (script vs npm) is selected, hop to its hosted URL
-  // before doing any further work. webOS/Tizen only; same CloudFront origin, so
-  // the flag persists across the load. Returning stops this build from booting.
+  // If a different app build (script vs npm) is selected, redirect to its
+  // hosted URL (webOS/Tizen only) and stop this build from booting.
   if (redirectToSelectedBuild(platform.name, flags.get('appBuild'), flags.get('npmModule'))) {
     log.info('redirecting to selected app build', {
       appBuild: flags.get('appBuild'),
@@ -81,13 +77,8 @@ async function boot(): Promise<void> {
     router,
   });
 
-  // 3. Kick off platform readiness in parallel — don't block the first
-  // paint on it. Vizio's awaitReady() can take up to 5s waiting for the
-  // companion library, and on desktop dev it always times out. Nothing
-  // in the initial UI render depends on platform globals (adapters use
-  // optional chaining + fallback for any platform calls), so the user
-  // sees the home screen immediately while platform-specific features
-  // light up in the background.
+  // 3. Kick off platform readiness in parallel — don't block first paint.
+  // Nothing in the initial render depends on platform globals.
   void platform.awaitReady().then(
     () => log.info('platform ready', platform.name),
     (e) => log.error('platform readiness failed', e),
@@ -108,17 +99,13 @@ async function boot(): Promise<void> {
   installViewportScale();
   startApp(rootEl, router);
 
-  // webOS delivers the remote BACK as a history popstate (not a keydown) and
-  // exits the app at the history root. Seed the sentinel + popstate→BACK bridge
-  // *after* the first route is set so the logical BACK handlers (e.g. the Home
-  // exit confirm) catch it instead of the OS closing the app.
+  // webOS delivers remote BACK as a history popstate; install the
+  // popstate→BACK bridge after the first route so BACK handlers catch it.
   new HardwareBackButton(remoteKeys).start();
 }
 
-// Uniform viewport scaling: design once at 1920x1080 and let CSS transform
-// fit it to whatever the actual TV gives us — HD (1280x720), Full HD
-// (1920x1080), 4K (most TV browsers still expose 1920x1080 logically and
-// upscale in hardware). One layout source, every panel.
+// Uniform viewport scaling: design at 1920x1080 and CSS-transform to fit
+// whatever the actual TV viewport is. One layout source, every panel.
 const DESIGN_W = 1920;
 const DESIGN_H = 1080;
 function installViewportScale(): void {

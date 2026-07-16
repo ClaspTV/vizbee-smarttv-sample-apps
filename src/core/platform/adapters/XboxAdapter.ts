@@ -13,8 +13,7 @@ export class XboxAdapter implements PlatformAdapter {
   }
 
   exit(): void {
-    // UWP apps don't typically force-exit; suspending behavior is handled
-    // by the OS lifecycle. window.close() is the safe fallback.
+    // UWP lifecycle is OS-managed; window.close() is the safe fallback.
     window.close();
   }
 

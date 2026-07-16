@@ -1,10 +1,7 @@
 import { addLogSink, LogEntry } from '@/services/logger/Logger';
 
-// On-screen log panel for debug mode. TVs have no easy devtools, so when Debug
-// mode is on we mirror logs onto the screen (newest at the bottom). Purely a
-// readout: pointer-events:none and no data-focusable, so it never interferes
-// with spatial navigation. Currently unwired (debug/remote logging disabled) —
-// kept for a future secure re-enable; see main.ts.
+// On-screen log panel for debug mode (TVs lack devtools). Read-only overlay that
+// never interferes with nav. Currently unwired — kept for a future re-enable.
 const MAX_LINES = 40;
 
 export class DebugOverlay {
@@ -48,8 +45,7 @@ export class DebugOverlay {
   }
 }
 
-// Compact one-line rendering of a log arg. Objects are JSON'd (truncated) so a
-// payload like a deeplink is readable on screen.
+// Compact one-line rendering of a log arg; objects are JSON'd and truncated.
 function format(arg: unknown): string {
   if (typeof arg === 'string') return arg;
   if (arg instanceof Error) return arg.message;

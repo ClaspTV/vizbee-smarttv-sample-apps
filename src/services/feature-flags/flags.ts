@@ -1,36 +1,26 @@
-// Single source of truth for flag keys + defaults. Adding a new flag = one
-// new entry here; everything else (Settings UI, persistence, URL overrides)
-// adapts automatically.
+// Single source of truth for flag keys + defaults. Adding a flag = one entry
+// here; Settings UI, persistence and URL overrides adapt automatically.
 
 export interface FeatureFlags {
   vizbeeSdk: 'full-es5' | 'full-es6' | 'light-es5' | 'light-es6';
-  // Whether the Vizbee SDK receives a <video> element ('element') or operates
-  // in element-less mode ('elementless') where state is polled via getVideoInfo().
-  // Elementless uses dedicated dev-origin SDK builds (samsung-el/lg-el/xbox-el).
+  // Whether the SDK gets a <video> element ('element') or runs element-less
+  // ('elementless', state polled via getVideoInfo(); dev-origin -el builds).
   playerElement: 'element' | 'elementless';
-  // Which environment's origin the SDK <script> loads from (orthogonal to the
-  // full/light × ES5/ES6 variant — it only swaps the host). dev/qa = the S3
-  // origin buckets, prod = the public CDN. See services/sdkEnv.ts. Applies to
-  // script builds only; npm builds bundle the SDK from node_modules.
+  // Which env origin the SDK <script> loads from: dev/qa = S3 buckets, prod =
+  // CDN. Script builds only; see services/sdkEnv.ts.
   sdkEnv: 'dev' | 'qa' | 'prod';
   videoPlayer: 'html';
-  // Which hosted app build to run: 'script' (external <script> SDK, …/webos/)
-  // or 'npm' (node_modules-bundled SDK, …/webos-with-nodemodule/<module>/).
-  // Selecting it redirects to that build's URL — see core/platform/appBuild.ts.
+  // Which hosted app build to run: 'script' (external <script> SDK) or 'npm'
+  // (node_modules-bundled SDK). Selecting it redirects — see appBuild.ts.
   appBuild: 'script' | 'npm';
-  // For the npm build only: which bundled module to load — maps to the
-  // …/webos-with-nodemodule/es5 vs /es6 hosted folders. Surfaced in the
-  // build-aware "Vizbee SDK" row (the script build uses `vizbeeSdk` instead).
+  // npm build only: which bundled module (es5 vs es6) to load. Surfaced in the
+  // build-aware "Vizbee SDK" row (script builds use `vizbeeSdk`).
   npmModule: 'es5' | 'es6';
-  // HomeSSO sign-in toast styling: 'default' = the SDK's out-of-box look;
-  // 'dazn' = spacing/border matched to the DAZN mockups. Applied at show time
-  // by HomeSSOService. Rendered in the "HomeSSO modal preview" section, not the
-  // generic flags loop.
+  // HomeSSO toast styling: 'default' (SDK look) or 'dazn' (DAZN mockups).
+  // Applied at show time; rendered in the "HomeSSO modal preview" section.
   homeSSOStyle: 'default' | 'dazn';
-  // HomeSSO modal localization: 'default' = LTR (the SDK default); 'rtl' mirrors
-  // the layout for right-to-left locales (icon trailing, text right-aligned).
-  // Applied at show time by HomeSSOService via the modal config's `direction`.
-  // Rendered in the "HomeSSO modal preview" section, not the generic flags loop.
+  // HomeSSO modal localization: 'default' = LTR, 'rtl' mirrors the layout for
+  // right-to-left locales. Rendered in the "HomeSSO modal preview" section.
   homeSSOLocale: 'default' | 'rtl';
 }
 
@@ -48,9 +38,8 @@ export const DEFAULT_FLAGS: FeatureFlags = {
 };
 
 export type FlagKey = keyof FeatureFlags;
-// The value universe the flag framework supports (toggle = boolean, radio =
-// string). Decoupled from the current flags so the boolean/toggle code paths
-// stay valid even when no boolean flag happens to exist right now.
+// Value universe the flag framework supports (boolean = toggle, string = radio).
+// Decoupled from current flags so toggle code paths stay valid with no boolean flag.
 export type FlagValue = string | boolean;
 
 export const FLAG_LABELS: Record<FlagKey, string> = {

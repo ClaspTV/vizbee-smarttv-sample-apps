@@ -4,10 +4,8 @@ import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate, formatSdkTimestamp } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
 import type { PlatformName } from '@/core/platform/PlatformAdapter';
-// window.vizbee is typed by @vizbeetv/sdk-qa/samsung (global Window augmentation
-// in samsung.d.ts). The homesso namespace is bridged in via the VizbeeSDK module
-// augmentation in src/types/global.d.ts — both continuity and homesso are
-// accessible on window.vizbee without casts.
+// window.vizbee is typed by @vizbeetv/sdk-qa/samsung; homesso is bridged in via
+// module augmentation in src/types/global.d.ts (no casts needed).
 import '@vizbeetv/sdk-qa/samsung';
 
 export interface VizbeeVideoMeta {
@@ -31,10 +29,8 @@ export interface IVizbeeService {
   init(appId: string): void;
   setVideo(meta: VizbeeVideoMeta, binding: VizbeePlayerBinding): void;
   setVideoStop(): void;
-  // Push a player state change to the SDK immediately (elementless mode only;
-  // no-op in element mode where the SDK reads state from the media element).
-  // Use the PlayerState string values: 'loading', 'started', 'playing',
-  // 'paused', 'buffering', 'ended', 'interrupted', 'error'.
+  // Push a player state change to the SDK (elementless mode only; no-op in
+  // element mode). Values: PlayerState strings ('playing', 'paused', …).
   notifyPlayerState(state: string): void;
   reset(): void;
 }
@@ -63,10 +59,8 @@ export class VizbeeService implements IVizbeeService {
   private async startWhenReady(appId: string): Promise<void> {
     const platform = services().platform.name;
 
-    // Load the SDK two ways depending on the build:
-    //  - npm build: bundle it from node_modules (build-time __SDK_NPM_PACKAGE__),
-    //    a side-effect import that populates window.vizbee.
-    //  - script build: inject the right SDK <script> URL for the platform.
+    // Load the SDK per build: npm builds bundle it from node_modules
+    // (__SDK_NPM_PACKAGE__); script builds inject the platform's <script> URL.
     try {
       if (__SDK_NPM_PACKAGE__) {
         const loaded = await loadBundledSdk();
@@ -109,15 +103,8 @@ export class VizbeeService implements IVizbeeService {
     }
   }
 
-  // Compose the SDK <script> URL from two orthogonal axes:
-  //   - `sdkEnv`    → the origin host (dev/qa/prod) — see services/sdkEnv.ts
-  //   - `vizbeeSdk` → full vs light, ES5 vs ES6 (the path under that origin)
-  // Tizen/webOS/Xbox expose all four variants in Settings; Vizio ships a single
-  // monolithic build, and desktop has none (App.ts gates init off → undefined).
-  //
-  // When `playerElement` is 'elementless', the dedicated elementless builds are
-  // used instead (samsung-el / lg-el / xbox-el). These are currently only
-  // available on the dev origin, so that origin is used for all environments.
+  // Compose the SDK <script> URL from `sdkEnv` (origin host) and `vizbeeSdk`
+  // (full/light × ES5/ES6 path). Elementless mode uses the dev-origin -el builds.
   private resolveSdkUrl(platform: PlatformName): string | undefined {
     if (services().flags.get('playerElement') === 'elementless') {
       const esVariant = services().flags.get('vizbeeSdk').endsWith('es6') ? 'es6' : 'es5';
@@ -137,10 +124,7 @@ export class VizbeeService implements IVizbeeService {
     // full = the monolithic SDK at the origin root (one file serves ES5 + ES6).
     if (variant.startsWith('full')) return `${origin}/v7/vizbee.js`;
     // light = the per-target build under /<segment>/; ES6 adds an /es6/ segment.
-    // DEV serves the newer "directsync" light builds under an extra /sdk/
-    // segment (…/sdk/lg/v7/…); qa/prod don't have that path (they 403/404), so
-    // the prefix is dev-only. Switch env to Dev in Settings (or ?ff_sdkEnv=dev)
-    // to load it.
+    // DEV also prefixes an extra /sdk/ segment (qa/prod lack that path).
     const devPrefix = env === 'dev' ? 'sdk/' : '';
     const es6 = variant.endsWith('es6') ? 'es6/' : '';
     return `${origin}/${devPrefix}${segment}/${es6}v7/vizbee.js`;
@@ -206,8 +190,7 @@ export class VizbeeService implements IVizbeeService {
     if (!window.vizbee?.continuity) return;
     const isElementless = services().flags.get('playerElement') === 'elementless';
     // Use the exact guid the mobile sent (stored on deeplink) so the SDK can
-    // correlate the cast. Fall back to the standard format for locally-initiated
-    // playback where no deeplink guid was recorded.
+    // correlate the cast; else fall back to the standard format.
     const sdkGuid = this.deeplinkGuidMap.get(meta.id)
       ?? `category:${meta.isLive ? 'live' : 'vod'}::media:${meta.id}`;
     this.log.debug('setVideo', { id: meta.id, sdkGuid, title: meta.title, isLive: !!meta.isLive, isElementless });
@@ -215,32 +198,23 @@ export class VizbeeService implements IVizbeeService {
     try {
       const ctx = window.vizbee.continuity.ContinuityContext.getInstance();
 
-      // Remove the previous adapter (if any) before registering the new video.
-      // This clears old metadata so the sender doesn't see stale title/image
-      // during the new video's loading/buffering phase.
+      // Remove the previous adapter before registering the new video, so the
+      // sender doesn't see stale title/image during loading.
       if (this.currentAdapter) {
         try { ctx.removePlayerAdapter(this.currentAdapter); } catch (_) {}
         this.currentAdapter = null;
       }
 
-      // Adapters map differs between SDK versions. HTMLPlayerAdapter presence is
-      // the discriminator — it only exists in the new API:
-      //
-      //   old SDK:  PlayerAdapter('html')           |  PlayerAdapter('html', element)
-      //   new SDK:  PlayerAdapter('html')           |  HTMLPlayerAdapter(element)
-      //
-      // Both old and new SDKs use PlayerAdapter for elementless — the SDK's
-      // _isValidPlayerAdapter check is instanceof PlayerAdapter, so BasePlayerAdapter
-      // (old SDK type) must never be used; it does not pass that check.
+      // Adapter API differs by SDK version; HTMLPlayerAdapter presence flags the
+      // new API. Always use PlayerAdapter for elementless (never BasePlayerAdapter).
       const adapters = window.vizbee.continuity.adapters as any;
       const { PlayerAdapter } = window.vizbee.continuity.adapters;
       const isNewSdkApi = !!adapters.HTMLPlayerAdapter;
 
       let adapter: any;
       if (isElementless) {
-        // Element-less mode: no media element passed to the adapter.
-        // PlayerPage drives all state via notifyPlayerState(); the poller only
-        // reads position + duration from this getter.
+        // Element-less: no media element. PlayerPage drives state via
+        // notifyPlayerState(); this getter only supplies position + duration.
         adapter = isNewSdkApi
           ? new PlayerAdapter('html')
           : new (PlayerAdapter as any)('html');
@@ -349,12 +323,8 @@ export class VizbeeService implements IVizbeeService {
     this.initialized = false;
   }
 
-  // The deployment date+time of the loaded continuity SDK, shown next to the
-  // version in Settings → Device. Memoised.
-  //  - script builds: the S3/CloudFront Last-Modified of the loaded <script>.
-  //  - npm builds: the SDK is bundled into the app, so its "deployment" moment
-  //    is when the app was built (__BUILD_TIME__).
-  // null only if neither applies or the header can't be read.
+  // Deployment date of the loaded continuity SDK (Settings → Device), memoised:
+  // script builds use the <script> Last-Modified; npm builds use __BUILD_TIME__.
   sdkDeploymentDate(): Promise<string | null> {
     if (this.loadedSdkUrl) {
       this.deploymentDatePromise ??= fetchSdkDeploymentDate(this.loadedSdkUrl);
@@ -367,18 +337,8 @@ export class VizbeeService implements IVizbeeService {
   }
 }
 
-// Per-platform path segment for the `light` (per-target) SDK builds, under the
-// selected env origin. `desktop` is intentionally absent — App.ts gates init
-// off — as is Vizio, which ships a single monolithic build (no full/light).
-//
-// XBOX NOTE: the `full` build is the legacy SDK that reaches into the EdgeHTML
-// WinRT JS bridge (Windows.Networking.Connectivity, Windows.System.*,
-// Windows.UI.WebUI.WebUIApplication, etc.). The new Xbox shell at
-// platforms/xbox/shell/ hosts WebView2 (Chromium), where window.Windows.* does
-// NOT exist — calls into that build will throw and break pairing / device info
-// reporting. The `light` builds are the WebView2-compatible @vizbeetv/sdk xbox
-// bundles; prefer those on the WebView2 shell (or wire a host-object bridge in
-// MainPage.xaml.cs to proxy the WinRT calls for the full build).
+// Per-platform path segment for the `light` SDK builds (Vizio/desktop absent).
+// Xbox: prefer light on WebView2; the full build needs EdgeHTML WinRT globals.
 const SDK_LIGHT_SEGMENT: Partial<Record<PlatformName, string>> = {
   tizen: 'samsung',
   webos: 'lg',
@@ -400,10 +360,7 @@ const SDK_ELEMENTLESS_URL: Record<'es5' | 'es6', Partial<Record<PlatformName, st
 };
 
 // Import the bundled SDK for npm builds. __SDK_NPM_PACKAGE__ is a build-time
-// constant (Vite define); the literal import is required so the bundler
-// includes the package, and the branch tree-shakes away in builds where the
-// constant is empty (script builds). Each package is a side-effect module that
-// populates window.vizbee. Add a branch per package as more ship.
+// constant; literal imports let the bundler include the package and tree-shake.
 async function loadBundledSdk(): Promise<boolean> {
   if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung') {
     await import('@vizbeetv/sdk-qa/samsung');
@@ -429,11 +386,8 @@ async function loadBundledSdk(): Promise<boolean> {
     await import('@vizbeetv/sdk-qa/xbox/es6');
     return true;
   }
-  // Element-less builds (samsung-el / lg-el / xbox-el). These are the only
-  // builds that expose the elementless status pipeline (notifyPlayerState); the
-  // non-el builds above have no such API, so an elementless app bundled against
-  // them silently drops all playback status. Match the script-build behavior in
-  // resolveSdkUrl(), which loads the -el URLs when playerElement is elementless.
+  // Element-less builds (samsung-el / lg-el / xbox-el) — the only ones exposing
+  // the elementless status pipeline (notifyPlayerState). Mirrors resolveSdkUrl().
   if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk-qa/samsung-el/es5') {
     await import('@vizbeetv/sdk-qa/samsung-el/es5');
     return true;

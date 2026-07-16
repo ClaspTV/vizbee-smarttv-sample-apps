@@ -4,12 +4,8 @@ import type { FeatureFlags } from '@/services/feature-flags/flags';
 export type AppBuild = FeatureFlags['appBuild']; // 'script' | 'npm'
 export type NpmModule = FeatureFlags['npmModule']; // 'es5' | 'es6'
 
-// Hosted folder layout on the (shared) CloudFront origin:
-//   <platform>/                          → script build (external <script> SDK)
-//   <platform>-with-nodemodule/es5/      → npm build, ES5 module
-//   <platform>-with-nodemodule/es6/      → npm build, ES6 module
-// Same origin across all three ⇒ the appBuild/npmModule flags persist across a
-// location.replace() between them.
+// Hosted layout (shared origin): <platform>/ = script build, <platform>-with-nodemodule/{es5,es6}/
+// = npm builds. Same origin, so flags persist across a location.replace() between them.
 const NPM_SUFFIX = '-with-nodemodule';
 
 function isHostedPlatform(p: PlatformName): boolean {
@@ -26,7 +22,7 @@ function folderFor(platform: PlatformName, appBuild: AppBuild, npmModule: NpmMod
 }
 
 // What's currently loaded, inferred from the URL path. null when the path isn't
-// a recognized hosted build folder (desktop dev, `vite preview` at /).
+// a recognized hosted build folder.
 export function currentTarget(
   platform: PlatformName,
 ): { appBuild: AppBuild; npmModule: NpmModule } | null {
@@ -67,9 +63,8 @@ export function targetUrl(
 
   const { pathname, origin, search, hash } = window.location;
   const desired = folderFor(platform, appBuild, npmModule);
-  // Swap the current build folder segment(s) for the desired ones. (^|/)…(/|$)
-  // anchors keep `webos` from matching inside `webos-with-nodemodule`, and let
-  // an optional deploy prefix sit in front.
+  // Swap the current build folder segment(s) for the desired ones; the (^|/)…(/|$)
+  // anchors keep `webos` from matching inside `webos-with-nodemodule`.
   const newPath =
     cur.appBuild === 'npm'
       ? pathname.replace(

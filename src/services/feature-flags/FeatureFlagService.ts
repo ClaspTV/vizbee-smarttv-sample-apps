@@ -10,10 +10,8 @@ type FlagEvents = {
   change: { key: FlagKey; value: FeatureFlags[FlagKey] };
 };
 
-// Persistence: localStorage by default.
-// Override priority (highest wins): URL params (?ff_<key>=value) > localStorage > defaults.
-// Subscribers get notified on toggle so the Settings page can re-render
-// without polling.
+// Persistence via localStorage. Override priority: URL params (?ff_<key>=) >
+// localStorage > defaults. Subscribers are notified on change for re-render.
 export class FeatureFlagService {
   private flags: FeatureFlags = { ...DEFAULT_FLAGS };
   private readonly emitter = new EventEmitter<FlagEvents>();
@@ -84,11 +82,8 @@ export class FeatureFlagService {
     return overrides;
   }
 
-  // Convert a raw ?ff_<key>= string to the flag's typed value. Boolean flags
-  // accept true/1 (anything else is false). Enum/string flags must match one
-  // of the values declared in FLAG_OPTIONS — an unknown value is ignored
-  // (returns undefined) so a stray query param can't push a flag into a state
-  // the UI can't represent (e.g. ff_vizbeeSdk=foo).
+  // Convert a raw ?ff_<key>= string to the flag's typed value. Boolean = true/1;
+  // enum/string must match FLAG_OPTIONS (unknown → undefined, ignored).
   private coerceOverride(key: FlagKey, raw: string): FlagValue | undefined {
     if (typeof DEFAULT_FLAGS[key] === 'boolean') {
       return raw === 'true' || raw === '1';

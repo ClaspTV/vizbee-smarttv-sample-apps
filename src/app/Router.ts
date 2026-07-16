@@ -1,18 +1,8 @@
 import { Logger } from '@/services/logger/Logger';
 import { EventEmitter } from '@/core/events/EventEmitter';
 
-// In-memory router. Navigation renders the matched page and notifies
-// subscribers — it does NOT touch browser history or location.hash.
-//
-// Why: on TVs the hardware BACK button is delivered as a browser history-back
-// (a `popstate`), which HardwareBackButton owns and translates into a logical
-// BACK action. If the router also pushed/popped history (the old hash-based
-// design), hardware BACK and route changes fought each other — a back press
-// fired both a hashchange (router re-render) and a popstate (BACK dispatch),
-// landing the user on Home and popping the exit dialog from any page. Keeping
-// routing in-memory makes BACK behave identically on every platform.
-//
-// The launch URL hash is read once for an initial deep link, then ignored.
+// In-memory router: renders the matched page and notifies subscribers without
+// touching history/location.hash (avoids fighting hardware BACK). Reads launch hash once.
 
 export type RouteHandler = (params: Record<string, string>) => () => void;
 
@@ -68,8 +58,8 @@ export class Router {
     return this.emitter.on('change', listener);
   }
 
-  // Initial deep link from the launch URL only (e.g., desktop `#/settings`,
-  // or a relaunch URL). Vizbee deeplinks arrive via the SDK → navigate().
+  // Initial deep link from the launch URL only; Vizbee deeplinks arrive
+  // via the SDK → navigate().
   private pathFromLaunchHash(): string | null {
     const h = window.location.hash.replace(/^#/, '');
     return h && h !== '/' ? h : null;

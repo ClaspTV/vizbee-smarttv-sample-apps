@@ -25,9 +25,8 @@ export interface LogEntry {
 type LogSink = (entry: LogEntry) => void;
 const _sinks = new Set<LogSink>();
 
-// Subscribe to emitted log entries (those that pass the level filter). Powers
-// the on-screen DebugOverlay so logs are visible on a TV without attaching a
-// remote inspector. Returns an unsubscribe fn.
+// Subscribe to emitted log entries (level-filtered). Powers the on-screen
+// DebugOverlay for TVs without a remote inspector. Returns an unsubscribe fn.
 export function addLogSink(sink: LogSink): () => void {
   _sinks.add(sink);
   return () => {

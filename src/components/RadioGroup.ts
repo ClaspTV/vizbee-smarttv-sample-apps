@@ -12,9 +12,8 @@ export interface RadioGroupOptions {
   onChange: (value: string) => void;
 }
 
-// Mutually-exclusive group of focusable options. Each option is its own
-// focusable element so spatial nav (UP/DOWN) moves between them like any
-// other Settings row. ENTER selects.
+// Mutually-exclusive group of focusable options; each is its own focusable
+// element so spatial nav moves between them. ENTER selects.
 export function createRadioGroup(opts: RadioGroupOptions): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'radio-group';
@@ -70,8 +69,8 @@ export function createRadioGroup(opts: RadioGroupOptions): HTMLElement {
   };
   render();
 
-  // Single remote-key subscription for the whole group — dispatches ENTER
-  // to whichever option is focused. Auto-cleans when the group leaves the DOM.
+  // Single remote-key subscription for the group: dispatches ENTER to the
+  // focused option. Auto-cleans when the group leaves the DOM.
   const off = services().remoteKeys.on(({ action }) => {
     if (action !== 'ENTER') return;
     const focused = document.activeElement;
@@ -90,8 +89,7 @@ export function createRadioGroup(opts: RadioGroupOptions): HTMLElement {
   return wrapper;
 }
 
-// Helper: return the first focusable option element inside a radio group,
-// for SettingsPage's initial-focus logic.
+// First focusable option in a group, for SettingsPage's initial focus.
 export function firstFocusableOption(group: HTMLElement): HTMLElement | undefined {
   return group.querySelector<HTMLElement>('.radio-option') ?? undefined;
 }
