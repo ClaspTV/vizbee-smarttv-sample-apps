@@ -1,10 +1,6 @@
 import { PlatformAdapter, DeviceInfo, PlatformName } from '../PlatformAdapter';
 
-/**
- * Shape of window.VizbeeBridge — injected by VizbeeBridgePlugin.java via
- * Android's addJavascriptInterface. Available on all pages loaded in the
- * FireTV WebView, including external (non-www) URLs.
- */
+/** Shape of window.VizbeeBridge, injected by VizbeeBridgePlugin.java. */
 interface VizbeeBridgeInterface {
   getPlatformName(): string;
   getDeviceInfo(): string;   // JSON string
@@ -20,11 +16,8 @@ declare global {
 }
 
 /**
- * Platform adapter for Amazon FireTV (Cordova WebView).
- *
- * Device info and exit are delegated to window.VizbeeBridge, injected by
- * VizbeeBridgePlugin via Android's addJavascriptInterface. Falls back to
- * stub values when the bridge is absent (desktop browser testing).
+ * Amazon FireTV (Cordova WebView). Delegates device info and exit to
+ * window.VizbeeBridge, falling back to stubs when the bridge is absent.
  */
 export class FireTVAdapter implements PlatformAdapter {
   readonly name: PlatformName = 'firetv';
@@ -35,8 +28,7 @@ export class FireTVAdapter implements PlatformAdapter {
         resolve();
         return;
       }
-      // On the device the bridge is ready after Cordova's deviceready event.
-      // In a browser there is no deviceready, so DOMContentLoaded is the fallback.
+      // Bridge is ready after Cordova's deviceready; DOMContentLoaded is the browser fallback.
       const onReady = () => resolve();
       document.addEventListener('deviceready', onReady, { once: true });
       window.addEventListener('DOMContentLoaded', onReady, { once: true });

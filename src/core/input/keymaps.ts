@@ -67,10 +67,8 @@ const XBOX_KEYS: Record<number, RemoteAction> = {
   196: 'BACK',
 };
 
-// FireTV remote in a Cordova Android WebView. The BACK button is intercepted
-// natively (see hooks/after_platform_add/override-back-button.js) and
-// re-delivered as a synthetic keydown with keyCode 4 (Android KEYCODE_BACK).
-// Transport keys follow the same codes as other TV platforms.
+// FireTV (Cordova Android WebView): BACK is intercepted natively and re-delivered
+// as a synthetic keydown with keyCode 4 (Android KEYCODE_BACK).
 const FIRETV_KEYS: Record<number, RemoteAction> = {
   ...COMMON_NAVIGATION,
   4: 'BACK',    // Android KEYCODE_BACK — injected synthetically by native hook
