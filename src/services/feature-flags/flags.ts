@@ -27,14 +27,14 @@ export interface FeatureFlags {
 // Key order here is the order rows appear in Settings. (npmModule renders
 // inside the build-aware "Vizbee SDK" row, not as its own row.)
 export const DEFAULT_FLAGS: FeatureFlags = {
-  appBuild: 'script',
+  appBuild: 'npm',
   vizbeeSdk: 'light-es5',
   sdkEnv: 'prod',
   videoPlayer: 'html',
   npmModule: 'es5',
   homeSSOStyle: 'dazn',
   homeSSOLocale: 'default',
-  playerElement: 'element',
+  playerElement: 'elementless',
 };
 
 export type FlagKey = keyof FeatureFlags;

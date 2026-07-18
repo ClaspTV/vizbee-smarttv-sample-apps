@@ -49,12 +49,12 @@ declare global {
   const __APP_VERSION__: string;
 }
 
-// Merge the HomeSSO namespace into the continuity SDK's window.vizbee type
-// so both continuity and homesso properties are accessible without casts.
-import type { HomeSSONamespace } from '@vizbeetv/homesso-sdk-qa';
-declare module '@vizbeetv/sdk-qa' {
-  interface VizbeeSDK {
-    homesso?: HomeSSONamespace;
+// The HomeSSO SDK types window.vizbee as VizbeeNamespace (already carrying
+// `homesso`); augment that same interface to add continuity, per its docs.
+import type { ContinuityFramework } from '@vizbeetv/sdk';
+declare global {
+  interface VizbeeNamespace {
+    continuity: ContinuityFramework;
   }
 }
 

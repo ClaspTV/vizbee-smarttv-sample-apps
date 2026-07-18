@@ -2,6 +2,7 @@ import { Logger } from '@/services/logger/Logger';
 import { services } from '@/services/ServiceContainer';
 import { fetchSdkDeploymentDate } from '@/services/sdkDeploymentDate';
 import { sdkOrigin } from '@/services/sdkEnv';
+import type { IVizbeeSignInInfo, StatusCallback, HomeSSONamespace } from '@vizbeetv/homesso-sdk';
 import { HomeSSOAuthStore, type AuthState, type HomeSSOAccount } from './HomeSSOAuthStore';
 
 // The HomeSSO SDK is an external side-effect <script> that self-registers
@@ -159,7 +160,7 @@ export class HomeSSOService {
     // the device's current per-type sign-in state from our auth store.
     m.setSignInInfoGetter?.(() => Promise.resolve(this.auth.getSignInInfo()));
     // Invoked when a paired mobile sender requests sign-in on this device.
-    m.setSignInHandler?.((info: any, cb: (status: any) => void) => this.handleSignIn(info, cb));
+    m.setSignInHandler?.((info, cb) => this.handleSignIn(info, cb));
     try {
       m.init?.();
       this.log.info('HomeSSO real sign-in flow wired (continuity session)');
@@ -274,7 +275,7 @@ export class HomeSSOService {
 
   // Handler for setSignInHandler: invoked when a mobile sender requests sign-in.
   // Issues a reg code, relays it via the toast, polls until the phone completes.
-  private handleSignIn(signInInfo: any, statusCallback: (status: any) => void): void {
+  private handleSignIn(signInInfo: IVizbeeSignInInfo, statusCallback: StatusCallback): void {
     const signInType: string = signInInfo?.signInType || DEFAULT_SIGN_IN_TYPE;
     this.log.info('HomeSSO sign-in request received', {
       signInType,
@@ -285,7 +286,7 @@ export class HomeSSOService {
   }
 
   // Reg code → progress toast → poll → success/failure, against homesso.vizbee.tv.
-  private async runBackendSignIn(signInType: string, emit: (status: any) => void): Promise<void> {
+  private async runBackendSignIn(signInType: string, emit: StatusCallback): Promise<void> {
     const msgs = this.messages();
     if (!msgs) return;
     const generation = ++this.signInGeneration; // a new request supersedes older polls
@@ -399,7 +400,7 @@ export class HomeSSOService {
     return id;
   }
 
-  private messages(): any {
+  private messages(): HomeSSONamespace['messages'] | undefined {
     return window.vizbee?.homesso?.messages;
   }
 

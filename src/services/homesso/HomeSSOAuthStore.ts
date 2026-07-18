@@ -1,3 +1,4 @@
+import type { VizbeeSignInInfo } from '@vizbeetv/homesso-sdk';
 import { EventEmitter } from '@/core/events/EventEmitter';
 import { Logger } from '@/services/logger/Logger';
 
@@ -27,15 +28,6 @@ export interface PendingSignIn {
 export interface AuthState {
   account: HomeSSOAccount | null;
   pending: PendingSignIn | null;
-}
-
-// Shape the SDK's `setSignInInfoGetter` expects (matched structurally; no .d.ts).
-// userLoginType + isSignedIn are required. See VizbeeSignInInfo.
-export interface VizbeeSignInInfo {
-  userLoginType: string;
-  isSignedIn: boolean;
-  userLogin: string;
-  userName?: string;
 }
 
 const STORAGE_KEY = 'vsw.homesso.account.v1';
