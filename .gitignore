@@ -15,3 +15,6 @@ platforms/firetv/platforms/
 platforms/firetv/plugins/
 # Generated launcher (built from index.html.tpl by scripts/build-firetv.sh)
 platforms/firetv/www/index.html
+
+# Local npm registry overrides (machine-specific workaround for global ~/.npmrc)
+.npmrc

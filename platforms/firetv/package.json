@@ -1,7 +1,7 @@
 {
   "name": "vizbee-sample-firetv",
   "displayName": "Vizbee Sample App — FireTV",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Cordova project wrapping vizbee-sample-webapp for Amazon FireTV",
   "devDependencies": {
     "cordova-android": "^14.0.1",

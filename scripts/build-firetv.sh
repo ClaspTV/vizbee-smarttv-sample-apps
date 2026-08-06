@@ -118,9 +118,24 @@ fi
 
 if [[ "$MODE" != "run" ]]; then
   APK_DIR="$CORDOVA_ROOT/platforms/android/app/build/outputs/apk"
-  mkdir -p "$ROOT/packages/firetv"
-  find "$APK_DIR" -name "*.apk" -exec cp {} "$ROOT/packages/firetv/" \;
+  DEST="$ROOT/packages/firetv"
+  mkdir -p "$DEST"
+
+  # Platform token from the cordova project folder (firetv, androidtv, …).
+  PLATFORM="$(basename "$CORDOVA_ROOT")"
+
+  # App version from the <widget> element in config.xml (e.g. 1.0.0).
+  APP_VERSION="$(grep '<widget' "$CORDOVA_ROOT/config.xml" | grep -oE 'version="[^"]+"' | grep -oE '[0-9.]+' | head -1)"
+  APP_VERSION="${APP_VERSION:-unknown}"
+
   echo ""
-  echo "APK(s) written to $ROOT/packages/firetv/"
-  echo "Install on FireTV: adb install packages/firetv/<filename>.apk"
+  # Rename each APK to a meaningful name: app-platform-version-buildtype.
+  # Build type (debug/release) is the name of the gradle output subfolder.
+  while IFS= read -r apk; do
+    BUILD_TYPE="$(basename "$(dirname "$apk")")"
+    OUT_NAME="vizbee-sample-app-${PLATFORM}-v${APP_VERSION}-${BUILD_TYPE}.apk"
+    cp "$apk" "$DEST/$OUT_NAME"
+    echo "APK written to packages/firetv/$OUT_NAME"
+    echo "Install on FireTV: adb install packages/firetv/$OUT_NAME"
+  done < <(find "$APK_DIR" -name "*.apk")
 fi

@@ -64,7 +64,8 @@ This:
 2. Generates `platforms/firetv/www/index.html` from the template with your URL
 3. Sets up the Cordova Android platform + `vizbee-bridge` plugin (first run only)
 4. Runs `cordova build android` → debug APK
-5. Copies the APK to `packages/firetv/`
+5. Copies + renames the APK to `packages/firetv/vizbee-sample-app-firetv-v<version>-<buildtype>.apk`
+   (version comes from `<widget version="…">` in `config.xml`; build type is `debug` or `release`)
 
 ### 3. Install on FireTV
 
@@ -75,8 +76,8 @@ This:
 # Connect over network ADB:
 adb connect <firetv-ip>:5555
 
-# Install the APK:
-adb install packages/firetv/app-debug.apk
+# Install the APK (name includes platform + version + build type):
+adb install packages/firetv/vizbee-sample-app-firetv-v1.0.0-debug.apk
 ```
 
 ### 4. Run directly on a connected device
@@ -97,6 +98,59 @@ KEYSTORE_PATH=/path/to/vizbee.jks \
 KEYSTORE_ALIAS=vizbee \
 KEYSTORE_PASS=yourpassword \
 bash scripts/build-firetv.sh build
+```
+
+---
+
+## Troubleshooting
+
+### `npm error code E401` during `cordova platform add` / build
+
+Cordova fetches the Android platform (`cordova-android`) and plugins from npm. If
+your **global** `~/.npmrc` overrides the default registry (e.g. points to a private
+company registry) and/or carries a stale auth token, that fetch of *public* packages
+fails with:
+
+```
+npm error code E401
+npm error Incorrect or missing password.
+```
+
+This is a local environment issue, not a problem with the project. The `cordova`
+command runs inside `platforms/firetv/`, which is its own npm project — so npm reads
+`platforms/firetv/.npmrc` (and falls back to your global `~/.npmrc`), **not** the
+repo-root config.
+
+**Fix** — create `platforms/firetv/.npmrc` (git-ignored) forcing public npm with no
+token, so public packages install anonymously:
+
+```ini
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=
+```
+
+Then re-run:
+
+```bash
+cd platforms/firetv && npx cordova platform add android && cd ../..
+npm run apk:firetv
+```
+
+If you legitimately use a private registry for other work, keep this override
+scoped to `platforms/firetv/.npmrc` (already git-ignored) rather than changing your
+global config.
+
+### `Could not load API for android project … Api.js` / `android broken`
+
+The generated `platforms/firetv/platforms/android` folder is present but its
+dependencies are missing (it's git-ignored, so a fresh checkout or a cleanup can
+leave it half-populated). Remove and re-add the platform:
+
+```bash
+cd platforms/firetv
+rm -rf platforms/android plugins
+npx cordova platform add android
+cd ../..
 ```
 
 ---

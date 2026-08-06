@@ -67,29 +67,4 @@ public class NativeBridge {
     public void exit() {
         cordova.getActivity().finish();
     }
-
-    // -------------------------------------------------------------------------
-    // Vizbee SDK placeholders
-    // These stubs will be replaced by real SDK calls in a future integration phase.
-    // -------------------------------------------------------------------------
-
-    /**
-     * Returns the Vizbee device identifier.
-     * @return empty string until Vizbee SDK integration is added.
-     */
-    @JavascriptInterface
-    public String getVizbeeDeviceId() {
-        // TODO: return Vizbee SDK device identifier once integrated
-        return "";
-    }
-
-    /**
-     * Returns the current HomeSSO sign-in state as a JSON string.
-     * @return {@code {"signedIn":false}} until HomeSSO integration is added.
-     */
-    @JavascriptInterface
-    public String getHomeSSOStatus() {
-        // TODO: return HomeSSO sign-in state from Vizbee SDK once integrated
-        return "{\"signedIn\":false}";
-    }
 }
