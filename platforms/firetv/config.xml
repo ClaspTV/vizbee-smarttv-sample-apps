@@ -8,7 +8,8 @@
 -->
 <widget id="com.vizbee.dev.samplewebapp" version="1.0.0"
   xmlns="http://www.w3.org/ns/widgets"
-  xmlns:cdv="http://cordova.apache.org/ns/1.0">
+  xmlns:cdv="http://cordova.apache.org/ns/1.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
 
   <name>Vizbee Sample App</name>
   <description>Cross-TV Vizbee sample webapp — FireTV platform</description>
@@ -26,7 +27,11 @@
   <!-- App icon (Xbox StoreLogo.png). -->
   <icon src="res/icon/android/icon.png" />
 
-  <!-- Launch splash (Xbox SplashScreen.png). -->
+  <!--
+    Legacy full-screen splash — only used on Fire OS < API 31.
+    On Fire OS 8 (API 31+) the Android 12 SplashScreen API is used instead;
+    see AndroidWindowSplashScreen* preferences in the android platform block.
+  -->
   <splash src="res/screen/android/splash.png" />
 
   <!-- Custom bridge: injects window.VizbeeBridge into all WebView pages. -->
@@ -46,5 +51,35 @@
 
     <!-- Keep the WebView alive when the app is sent to background. -->
     <preference name="KeepRunning" value="true" />
+
+    <!--
+      Android 12+ (Fire OS 8) splash screen. The legacy <splash> full-screen
+      image is ignored on API 31+; instead a centered icon is shown on a solid
+      background. Without these, Cordova shows its default grey placeholder icon.
+      Black background matches index.html (body { background:#000 }) for a
+      seamless native-splash -> WebView transition.
+    -->
+    <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/screen/android/splash-icon.png" />
+    <preference name="AndroidWindowSplashScreenBackgroundColor" value="#000000" />
+
+    <!--
+      Fire TV home-screen / "Recently used apps" tiles are 16:9 landscape
+      (1280x720). Without a banner, Fire OS crops the square launcher icon
+      into the landscape frame (zoomed / grey bars). Supplying android:banner
+      gives Fire OS proper landscape art. The square @mipmap/ic_launcher is
+      still used for Settings > Manage Installed Applications.
+    -->
+    <resource-file
+      src="res/store/firetv-home-tile-1280x720.png"
+      target="app/src/main/res/drawable/banner.png" />
+
+    <edit-config file="AndroidManifest.xml" target="/manifest/application" mode="merge">
+      <application android:banner="@drawable/banner" />
+    </edit-config>
+
+    <!-- Mark as a TV (leanback) app so Fire OS uses the banner for the tile. -->
+    <config-file target="AndroidManifest.xml" parent="/manifest/application/activity/intent-filter">
+      <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+    </config-file>
   </platform>
 </widget>
