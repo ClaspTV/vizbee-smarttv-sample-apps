@@ -67,6 +67,19 @@ const XBOX_KEYS: Record<number, RemoteAction> = {
   196: 'BACK',
 };
 
+// FireTV (Cordova Android WebView): BACK is intercepted natively and re-delivered
+// as a synthetic keydown with keyCode 4 (Android KEYCODE_BACK).
+const FIRETV_KEYS: Record<number, RemoteAction> = {
+  ...COMMON_NAVIGATION,
+  4: 'BACK',    // Android KEYCODE_BACK — injected synthetically by native hook
+  415: 'PLAY',
+  19: 'PAUSE',
+  179: 'PLAY_PAUSE',
+  413: 'STOP',
+  417: 'FAST_FORWARD',
+  412: 'REWIND',
+};
+
 const DESKTOP_KEYS: Record<number, RemoteAction> = {
   ...COMMON_NAVIGATION,
   32: 'PLAY_PAUSE', // Space
@@ -82,6 +95,8 @@ export function getKeymap(platform: PlatformName): Record<number, RemoteAction> 
       return VIZIO_KEYS;
     case 'xbox':
       return XBOX_KEYS;
+    case 'firetv':
+      return FIRETV_KEYS;
     case 'desktop':
     default:
       return DESKTOP_KEYS;

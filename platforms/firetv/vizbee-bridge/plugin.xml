@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cordova plugin: vizbee-bridge
+  Injects window.VizbeeBridge into all pages loaded in the FireTV WebView via
+  Android's WebView.addJavascriptInterface(). This approach works for external
+  URLs (unlike standard cordova.exec() which requires cordova.js in the page).
+-->
+<plugin id="vizbee-bridge" version="0.0.1"
+  xmlns="http://apache.org/cordova/ns/plugins/1.0">
+
+  <name>VizbeeBridge</name>
+  <description>
+    Native bridge for the Vizbee Sample App on FireTV. Registers
+    window.VizbeeBridge in the WebView so the hosted sample webapp can call
+    native device APIs without bundling Cordova-specific code.
+  </description>
+  <license>MIT</license>
+
+  <engines>
+    <engine name="cordova" version=">=10.0.0" />
+    <engine name="cordova-android" version=">=10.0.0" />
+  </engines>
+
+  <!--
+    No JS-side www/ needed: communication happens via window.VizbeeBridge
+    (addJavascriptInterface), not the standard cordova.exec() channel.
+  -->
+
+  <platform name="android">
+    <!-- Register the plugin so Cordova loads it at startup (onload=true). -->
+    <config-file target="res/xml/config.xml" parent="/*">
+      <feature name="VizbeeBridge">
+        <param name="android-package" value="tv.vizbee.cordova.VizbeeBridgePlugin" />
+        <param name="onload" value="true" />
+      </feature>
+    </config-file>
+
+    <source-file
+      src="src/android/VizbeeBridgePlugin.java"
+      target-dir="app/src/main/java/tv/vizbee/cordova" />
+    <source-file
+      src="src/android/NativeBridge.java"
+      target-dir="app/src/main/java/tv/vizbee/cordova" />
+  </platform>
+</plugin>

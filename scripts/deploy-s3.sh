@@ -29,7 +29,7 @@ PREFIX="${PREFIX%/}"
 KEYBASE=""
 [ -n "$PREFIX" ] && KEYBASE="$PREFIX/"
 
-ALL_PLATFORMS=(desktop viziosmartcast tizen webos xbox)
+ALL_PLATFORMS=(desktop viziosmartcast tizen webos xbox firetv)
 if [ "$#" -gt 0 ]; then
   PLATFORMS=("$@")
 else

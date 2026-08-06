@@ -25,9 +25,8 @@ export function renderPlayerPage(
   videoEl.preload = 'auto';
   videoEl.autoplay = true;
   const detachSource = attachVideoSource(videoEl, video.videoUrl);
-  // Explicit play() backs up the autoplay attribute — TV browsers vary on
-  // whether the attribute alone fires after a hash-route navigation, where
-  // the home-page click's user-gesture context has already been consumed.
+  // Explicit play() backs up the autoplay attribute — TV browsers vary on whether
+  // it fires after a hash-route nav where the click's gesture context is consumed.
   videoEl.play().catch((e) => console.warn('autoplay rejected', e?.name, e?.message));
 
   // Overlay (gradient + metadata + controls)
@@ -67,14 +66,90 @@ export function renderPlayerPage(
   };
   const seekBack = (): void => seekBy(-SEEK_STEP_SEC);
   const seekForward = (): void => seekBy(SEEK_STEP_SEC);
+
+  // Smooth held-key seek for REWIND/FAST_FORWARD: first press starts a setInterval
+  // scrub, later keydowns extend a debounce window, keyup/timeout commits.
+  let pendingSeekTime: number | undefined;
+  let seekDirection: -1 | 1 | 0 = 0;
+  let seekAnimInterval: number | undefined;
+  let seekCommitTimer: number | undefined;
+  let seekLastMs = 0;
+  const SEEK_SPEED_PCT = 15; // % of total duration per real-second held
+
+  const updateSeekBar = (t: number): void => {
+    const dur = videoEl.duration || video.durationSec;
+    if (dur && isFinite(dur)) {
+      progressFill.style.width = `${Math.max(0, Math.min(100, (t / dur) * 100))}%`;
+    }
+    timeEl.textContent = `${formatTime(t)} / ${formatTime(dur)}`;
+  };
+
+  const stopSeekAnim = (): void => {
+    window.clearInterval(seekAnimInterval);
+    seekAnimInterval = undefined;
+    seekLastMs = 0;
+  };
+
+  const commitSeek = (): void => {
+    stopSeekAnim();
+    window.clearTimeout(seekCommitTimer);
+    seekDirection = 0;
+    progressFill.classList.remove('player__progress-fill--scrubbing');
+    if (pendingSeekTime !== undefined) {
+      videoEl.currentTime = pendingSeekTime;
+      pendingSeekTime = undefined;
+    }
+  };
+
+  const onSeekKeyDown = (direction: -1 | 1): void => {
+    if (pendingSeekTime === undefined) {
+      // First press: jump immediately and start the animation.
+      const dur = videoEl.duration || video.durationSec;
+      pendingSeekTime = Math.max(0, Math.min(dur || 0, (videoEl.currentTime ?? 0) + direction * SEEK_STEP_SEC));
+      seekDirection = direction;
+      // Disable CSS transition so interval ticks render as instant width changes.
+      progressFill.classList.add('player__progress-fill--scrubbing');
+      updateSeekBar(pendingSeekTime);
+      stopSeekAnim();
+      seekLastMs = performance.now();
+      seekAnimInterval = window.setInterval(() => {
+        if (pendingSeekTime === undefined || seekDirection === 0) return;
+        const now = performance.now();
+        const dt = (now - seekLastMs) / 1000;
+        seekLastMs = now;
+        const dur = videoEl.duration || video.durationSec;
+        const speedSec = ((dur || 0) * SEEK_SPEED_PCT) / 100;
+        pendingSeekTime = Math.max(0, Math.min(dur || 0, pendingSeekTime + seekDirection * speedSec * dt));
+        updateSeekBar(pendingSeekTime);
+      }, 50);
+    } else if (seekDirection !== direction) {
+      seekDirection = direction; // direction reversed mid-hold
+    }
+    // Each keydown (repeat or not) proves key is still held — push back commit.
+    window.clearTimeout(seekCommitTimer);
+    seekCommitTimer = window.setTimeout(commitSeek, 800);
+  };
+
+  // keyup is the most reliable "key released" signal on platforms that fire it.
+  // commitSeek is idempotent so double-firing with the debounce is harmless.
+  const onSeekKeyUp = (e: KeyboardEvent): void => {
+    const seekKeyCodes = new Set([412, 417, 179]); // REWIND, FF, PLAY_PAUSE
+    if (pendingSeekTime !== undefined && seekKeyCodes.has(e.keyCode)) {
+      commitSeek();
+    }
+  };
+  window.addEventListener('keyup', onSeekKeyUp, true);
   const togglePlay = (): void => {
     if (videoEl.paused) videoEl.play().catch((e) => console.warn('video.play() rejected', e?.name, e?.message));
     else videoEl.pause();
   };
 
-  // Leave the player and return to the previous screen (Home). Shared by the
-  // STOP/BACK keys and the end-of-playback handler below.
+  // Return to Home. Shared by STOP/BACK and end-of-playback; the guard prevents
+  // double-navigation when 'ended' and the timeupdate fallback fire together.
+  let exited = false;
   const exitPlayer = (): void => {
+    if (exited) return;
+    exited = true;
     services().vizbee.setVideoStop();
     services().router.back('/home');
   };
@@ -135,9 +210,8 @@ export function renderPlayerPage(
   page.appendChild(overlay);
   root.appendChild(page);
 
-  // Immersive mode: hide the side menu while in playback. Spatial focus nav
-  // stays *active* so LEFT/RIGHT moves between the rewind/play/forward
-  // buttons; direct seek is on the dedicated REWIND/FAST_FORWARD remote keys.
+  // Immersive mode: hide the side menu during playback. Focus nav stays active so
+  // LEFT/RIGHT moves between buttons; direct seek is on the REWIND/FAST_FORWARD keys.
   const layout = document.querySelector<HTMLElement>('.app-layout');
   layout?.classList.add('app-layout--immersive');
   services().focus.setFocus(playPauseBtn);
@@ -154,10 +228,8 @@ export function renderPlayerPage(
   const onEnded = (): void => exitPlayer();
   videoEl.addEventListener('ended', onEnded);
 
-  // Push player state to the Vizbee SDK. notifyPlayerState() is a no-op in
-  // element mode — only active in elementless mode where the SDK has no media
-  // element to read from. This mirrors what real host apps do: call from their
-  // own player callbacks rather than relying on event listener wiring in the SDK.
+  // Push player state to the Vizbee SDK. notifyPlayerState() is a no-op in element
+  // mode; only active in elementless mode, mirroring how real host apps report state.
   const vzb = services().vizbee;
   const onVzbLoadStart    = (): void => vzb.notifyPlayerState('loading');
   const onVzbLoadedMeta   = (): void => vzb.notifyPlayerState('started');
@@ -173,8 +245,7 @@ export function renderPlayerPage(
   videoEl.addEventListener('ended',          onVzbEnded);
   videoEl.addEventListener('waiting',        onVzbWaiting);
   videoEl.addEventListener('error',          onVzbError);
-  // loadstart fires when src is set — before setVideo() is called — so push
-  // the initial state now that VideoInfo is registered with the SDK.
+  // loadstart fired before setVideo(), so push the initial state now.
   vzb.notifyPlayerState('loading');
 
   // Auto-hide overlay after a few seconds of no input.
@@ -188,21 +259,33 @@ export function renderPlayerPage(
   };
   showOverlay();
 
-  // Progress + time
+  // Progress + time — skip visual update while a debounced seek is pending.
   videoEl.addEventListener('timeupdate', () => {
     const cur = videoEl.currentTime || 0;
     const dur = videoEl.duration || video.durationSec;
-    if (dur && isFinite(dur)) {
-      progressFill.style.width = `${(cur / dur) * 100}%`;
+    if (pendingSeekTime === undefined) {
+      if (dur && isFinite(dur)) {
+        progressFill.style.width = `${(cur / dur) * 100}%`;
+      }
+      timeEl.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
     }
-    timeEl.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+
+    // Fallback for TV browsers that don't reliably fire 'ended' for HLS VOD;
+    // the 1 s threshold gives HLS a segment's worth of headroom.
+    const actualDur = videoEl.duration;
+    if (isFinite(actualDur) && actualDur > 0 && cur >= actualDur - 1.0) {
+      exitPlayer();
+    }
   });
 
-  // Global remote shortcuts. ENTER goes to the focused button (FocusableButton
-  // handles it); LEFT/RIGHT move focus between buttons UNLESS the progress
-  // bar is focused, in which case it claims the x-axis and we seek instead.
-  // Key repeat (held arrow) gives a fine 1s step so holding feels like a
-  // continuous scrub; a single tap jumps SEEK_STEP_SEC.
+  // Belt-and-suspenders: poll videoEl.ended every 500 ms in case both 'ended'
+  // and timeupdate stop firing before the threshold.
+  const endedPoll = window.setInterval(() => {
+    if (videoEl.ended) exitPlayer();
+  }, 500);
+
+  // Global remote shortcuts. LEFT/RIGHT move focus between buttons unless the
+  // progress bar is focused, where they seek (1s held for scrub, SEEK_STEP_SEC on tap).
   const offRemote = services().remoteKeys.on(({ action, originalEvent }) => {
     showOverlay();
     switch (action) {
@@ -216,10 +299,10 @@ export function renderPlayerPage(
         togglePlay();
         break;
       case 'REWIND':
-        seekBack();
+        onSeekKeyDown(-1);
         break;
       case 'FAST_FORWARD':
-        seekForward();
+        onSeekKeyDown(1);
         break;
       case 'LEFT':
         if (document.activeElement === progress) {
@@ -243,6 +326,12 @@ export function renderPlayerPage(
   return () => {
     offRemote();
     window.clearTimeout(hideTimer);
+    stopSeekAnim();
+    window.clearTimeout(seekCommitTimer);
+    window.clearInterval(endedPoll);
+    window.removeEventListener('keyup', onSeekKeyUp, true);
+    pendingSeekTime = undefined;
+    seekDirection = 0;
     services().vizbee.setVideoStop();
     videoEl.pause();
     videoEl.removeEventListener('play', syncPlayLabel);
@@ -262,10 +351,8 @@ export function renderPlayerPage(
   };
 }
 
-// HLS streams play natively on Safari/iOS/tvOS and most smart-TV browsers
-// (Tizen, webOS, Roku). Desktop Chrome/Firefox/Edge need an MSE-based shim,
-// so we lazy-load HLS.js from a CDN only on those browsers — TV bundles
-// never download it. Returns a detach fn for cleanup.
+// HLS plays natively on Safari and most smart-TV browsers; desktop Chrome/Firefox/Edge
+// lazy-load HLS.js from a CDN. Returns a detach fn for cleanup.
 function attachVideoSource(videoEl: HTMLVideoElement, url: string): () => void {
   const isHls = /\.m3u8(\?|$)/i.test(url);
   const nativeHls = videoEl.canPlayType('application/vnd.apple.mpegurl') !== '';
