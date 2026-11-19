@@ -31,16 +31,21 @@ export function startApp(root: HTMLElement, router: Router): void {
   router.register('/settings', () => renderSettingsPage(content));
   router.register('/player/:id', (params) => renderPlayerPage(content, params));
 
-  // Vizbee only makes sense on the real TV platforms; desktop is for local dev.
-  if (services().platform.name === 'desktop') {
-    log.info('Vizbee skipped on desktop platform');
-  } else {
-    services().vizbee.init(services().config.get().vizbeeAppId);
-  }
-
-  // HomeSSO modal preview: load the SDK on every platform (incl. desktop)
-  // so Settings toggles can trigger its sign-in toasts with dummy data.
-  void services().homeSSO.init();
-
   router.start('/home');
+
+  // SDK init stays off the launch critical path: render the first page, then
+  // kick off the Vizbee + HomeSSO SDK loads after the first paint.
+  const initSdksAfterPaint = (): void => {
+    // Vizbee only makes sense on the real TV platforms; desktop is for local dev.
+    if (services().platform.name === 'desktop') {
+      log.info('Vizbee skipped on desktop platform');
+    } else {
+      services().vizbee.init(services().config.get().vizbeeAppId);
+    }
+
+    // HomeSSO modal preview: load the SDK on every platform (incl. desktop)
+    // so Settings toggles can trigger its sign-in toasts with dummy data.
+    void services().homeSSO.init();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(initSdksAfterPaint));
 }

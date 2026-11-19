@@ -9,7 +9,7 @@ export type NpmModule = FeatureFlags['npmModule']; // 'es5' | 'es6'
 const NPM_SUFFIX = '-with-nodemodule';
 
 function isHostedPlatform(p: PlatformName): boolean {
-  return p === 'webos' || p === 'tizen' || p === 'xbox';
+  return p === 'webos' || p === 'tizen' || p === 'xbox' || p === 'viziosmartcast';
 }
 
 function escapeRe(s: string): string {
