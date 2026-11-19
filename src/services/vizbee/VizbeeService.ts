@@ -385,6 +385,14 @@ async function loadBundledSdk(): Promise<boolean> {
     await import('@vizbeetv/sdk/xbox/es6');
     return true;
   }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/vizio') {
+    await import('@vizbeetv/sdk/vizio');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/vizio/es6') {
+    await import('@vizbeetv/sdk/vizio/es6');
+    return true;
+  }
   // Element-less builds (samsung-el / lg-el / xbox-el) — the only ones exposing
   // the elementless status pipeline (notifyPlayerState). Mirrors resolveSdkUrl().
   if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/samsung-el/es5') {
@@ -409,6 +417,14 @@ async function loadBundledSdk(): Promise<boolean> {
   }
   if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/xbox-el/es6') {
     await import('@vizbeetv/sdk/xbox-el/es6');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/vizio-el/es5') {
+    await import('@vizbeetv/sdk/vizio-el/es5');
+    return true;
+  }
+  if (__SDK_NPM_PACKAGE__ === '@vizbeetv/sdk/vizio-el/es6') {
+    await import('@vizbeetv/sdk/vizio-el/es6');
     return true;
   }
   return false;
