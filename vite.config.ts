@@ -16,7 +16,7 @@ const APP_VERSION: string = JSON.parse(
 //
 // Target ES2017 for older TV browser engines (Tizen 5, webOS 4, Vizio
 // SmartCast, Xbox Edge); newer engines work fine.
-const PLATFORM_MODES = new Set(['viziosmartcast', 'tizen', 'webos', 'xbox', 'desktop']);
+const PLATFORM_MODES = new Set(['viziosmartcast', 'tizen', 'webos', 'xbox', 'firetv', 'desktop']);
 const VIZIO_COMPANION_LIB_URL = 'http://localhost:12345/scfs/cl/js/vizio-companion-lib.js';
 
 // Inject the Vizio companion library <script> only into Vizio builds. The URL

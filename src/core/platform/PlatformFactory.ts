@@ -4,11 +4,8 @@ import { Logger } from '@/services/logger/Logger';
 
 const log = new Logger('PlatformFactory');
 
-// `@active-adapter` is a Vite alias resolved at build time to one of
-// src/core/platform/active/<platform>.ts (see vite.config.ts → resolve.alias).
-// Each shim re-exports its adapter as `ActiveAdapter`, so this factory's
-// single static import pulls in only the matched adapter — the others never
-// reach the bundle.
+// `@active-adapter` is a Vite alias (see vite.config.ts) resolved at build time
+// to the matched platform's shim, so only that adapter reaches the bundle.
 export class PlatformFactory {
   static async detect(): Promise<PlatformAdapter> {
     if (typeof window === 'undefined') {
@@ -20,6 +17,6 @@ export class PlatformFactory {
   }
 
   static get supportedPlatforms(): readonly PlatformName[] {
-    return ['viziosmartcast', 'tizen', 'webos', 'xbox', 'desktop'] as const;
+    return ['viziosmartcast', 'tizen', 'webos', 'xbox', 'firetv', 'desktop'] as const;
   }
 }

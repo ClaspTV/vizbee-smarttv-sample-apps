@@ -1,0 +1,9 @@
+{
+  "name": "vizbee-bridge",
+  "version": "0.0.1",
+  "description": "Native bridge Cordova plugin for Vizbee Sample App on FireTV",
+  "cordova": {
+    "id": "vizbee-bridge",
+    "platforms": ["android"]
+  }
+}
