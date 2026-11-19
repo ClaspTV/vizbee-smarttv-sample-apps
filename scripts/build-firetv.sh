@@ -78,6 +78,14 @@ echo "    App URL: $FIRETV_APP_URL"
 echo "==> [3/4] Setting up Cordova project..."
 cd "$CORDOVA_ROOT"
 
+# Force Cordova's npm installs (cordova-android, plugins) to the public registry.
+# `npm run` injects the repo's resolved npm config into this script's env as
+# npm_config_* vars; with a private default registry in ~/.npmrc (an auth-gated
+# Artifactory) that npm_config_registry leaks into Cordova's `npm install` and
+# 401s on public packages. The env var outranks any .npmrc, so it must be reset
+# here in the environment — a project .npmrc alone cannot override it.
+export npm_config_registry="https://registry.npmjs.org/"
+
 if [[ ! -d "$CORDOVA_ROOT/platforms/android" ]]; then
   echo "    Adding Android platform (first run — this may take a minute)..."
   npx cordova platform add android
@@ -116,26 +124,27 @@ fi
 
 # ── Copy APK(s) to packages/firetv/ ──────────────────────────────────────────
 
-if [[ "$MODE" != "run" ]]; then
-  APK_DIR="$CORDOVA_ROOT/platforms/android/app/build/outputs/apk"
-  DEST="$ROOT/packages/firetv"
-  mkdir -p "$DEST"
+# Runs for both build and run modes: `cordova run` produces the same APK under
+# outputs/apk/, so we always copy it out under a standard name (Gradle only ever
+# emits the generic app-debug.apk). In run mode the APK is also already installed.
+APK_DIR="$CORDOVA_ROOT/platforms/android/app/build/outputs/apk"
+DEST="$ROOT/packages/firetv"
+mkdir -p "$DEST"
 
-  # Platform token from the cordova project folder (firetv, androidtv, …).
-  PLATFORM="$(basename "$CORDOVA_ROOT")"
+# Platform token from the cordova project folder (firetv, androidtv, …).
+PLATFORM="$(basename "$CORDOVA_ROOT")"
 
-  # App version from the <widget> element in config.xml (e.g. 1.0.0).
-  APP_VERSION="$(grep '<widget' "$CORDOVA_ROOT/config.xml" | grep -oE 'version="[^"]+"' | grep -oE '[0-9.]+' | head -1)"
-  APP_VERSION="${APP_VERSION:-unknown}"
+# App version from the <widget> element in config.xml (e.g. 1.0.0).
+APP_VERSION="$(grep '<widget' "$CORDOVA_ROOT/config.xml" | grep -oE 'version="[^"]+"' | grep -oE '[0-9.]+' | head -1)"
+APP_VERSION="${APP_VERSION:-unknown}"
 
-  echo ""
-  # Rename each APK to a meaningful name: app-platform-version-buildtype.
-  # Build type (debug/release) is the name of the gradle output subfolder.
-  while IFS= read -r apk; do
-    BUILD_TYPE="$(basename "$(dirname "$apk")")"
-    OUT_NAME="vizbee-sample-app-${PLATFORM}-v${APP_VERSION}-${BUILD_TYPE}.apk"
-    cp "$apk" "$DEST/$OUT_NAME"
-    echo "APK written to packages/firetv/$OUT_NAME"
-    echo "Install on FireTV: adb install packages/firetv/$OUT_NAME"
-  done < <(find "$APK_DIR" -name "*.apk")
-fi
+echo ""
+# Rename each APK to a meaningful name: app-platform-version-buildtype.
+# Build type (debug/release) is the name of the gradle output subfolder.
+while IFS= read -r apk; do
+  BUILD_TYPE="$(basename "$(dirname "$apk")")"
+  OUT_NAME="vizbee-sample-app-${PLATFORM}-v${APP_VERSION}-${BUILD_TYPE}.apk"
+  cp "$apk" "$DEST/$OUT_NAME"
+  echo "APK written to packages/firetv/$OUT_NAME"
+  echo "Install on FireTV: adb install packages/firetv/$OUT_NAME"
+done < <(find "$APK_DIR" -name "*.apk")

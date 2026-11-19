@@ -26,6 +26,8 @@
     "start:firetv": "vite build --mode firetv && vite preview --outDir dist/firetv --host",
     "apk:firetv": "bash scripts/build-firetv.sh build",
     "run:firetv": "bash scripts/build-firetv.sh run",
+    "dev:firetv": "bash scripts/dev-firetv.sh run",
+    "dev:firetv:apk": "bash scripts/dev-firetv.sh build",
     "deploy:s3": "CLOUDFRONT_DISTRIBUTION_ID=${CLOUDFRONT_DISTRIBUTION_ID:-E12EF2Z11SO5GL} bash scripts/deploy-s3.sh",
     "ship:tizen:script": "tsc --noEmit && vite build --mode tizen && npm run deploy:s3 tizen",
     "ship:tizen:npm:es5": "tsc --noEmit && VIZBEE_SDK_NPM_PACKAGE=@vizbeetv/sdk/samsung vite build --mode tizen --outDir dist/tizen-with-nodemodule/es5 && npm run deploy:s3 tizen-with-nodemodule/es5",
