@@ -32,12 +32,16 @@ export function startApp(root: HTMLElement, router: Router): void {
   router.register('/player/:id', (params) => renderPlayerPage(content, params));
 
   router.start('/home');
+  console.log('[VZBPERF] app launched');
 
   // SDK init stays off the launch critical path: render the first page, then
   // kick off the Vizbee + HomeSSO SDK loads after the first paint.
   const initSdksAfterPaint = (): void => {
     // Vizbee only makes sense on the real TV platforms; desktop is for local dev.
-    if (services().platform.name === 'desktop') {
+    // __VZB_ENABLED__ is false in the perf "without Vizbee" baseline build.
+    if (!__VZB_ENABLED__) {
+      log.info('Vizbee disabled for this build (__VZB_ENABLED__=false)');
+    } else if (services().platform.name === 'desktop') {
       log.info('Vizbee skipped on desktop platform');
     } else {
       services().vizbee.init(services().config.get().vizbeeAppId);

@@ -1,0 +1,48 @@
+[
+  {
+    "id": "VZB-JS-001",
+    "title": "Player polled on a timer instead of listening to <video> events",
+    "metric": "CPU",
+    "criticality": "HIGH",
+    "owner": "sdk",
+    "status": "open",
+    "perRun": ["home +0.4%", "play +1.1%", "play +0.9%"],
+    "cause": "getVideoInfo/notifyPlayerState read the <video> element every loop tick",
+    "risk": "steady CPU burn during playback; worse on low-end panels",
+    "fix": "cache values, use timeupdate/progress/ratechange listeners, read only what changed"
+  },
+  {
+    "id": "VZB-JS-002",
+    "title": "New fetch/WebSocket per PubNub publish",
+    "metric": "Memory",
+    "criticality": "MEDIUM",
+    "owner": "sdk",
+    "status": "open",
+    "perRun": ["play +1.3MB", "play +1.6MB"],
+    "cause": "a new request wrapper is created per message instead of reusing one",
+    "risk": "heap growth over a session while a sender is connected",
+    "fix": "reuse one client, created when a phone connects and released on disconnect"
+  },
+  {
+    "id": "VZB-JS-003",
+    "title": "Logger builds strings even when logging is off",
+    "metric": "CPU",
+    "criticality": "LOW",
+    "owner": "sdk",
+    "status": "open",
+    "cause": "callers concatenate before the level check; the level table is rebuilt per call",
+    "risk": "small constant overhead on every SDK code path",
+    "fix": "check the level first and build nothing when that level is off"
+  },
+  {
+    "id": "VZB-JS-004",
+    "title": "Home-page CPU rises with a sender connected",
+    "metric": "CPU",
+    "criticality": "LOW",
+    "owner": "sdk",
+    "status": "open",
+    "cause": "monitor/state functions run every loop iteration even when nothing changed",
+    "risk": "idle-home cost paid whenever a phone is paired",
+    "fix": "run monitor/state on change only"
+  }
+]

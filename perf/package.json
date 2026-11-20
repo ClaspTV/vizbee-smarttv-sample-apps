@@ -1,0 +1,21 @@
+{
+  "name": "vizbee-sample-webapp-perf",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated perf harness: measures Vizbee JS SDK CPU + memory on smart-TV platforms over CDP. Not linked to the app lockfile.",
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "test": "node --test",
+    "smoke": "node perf-smoke.js",
+    "e2e": "node perf-e2e.js",
+    "deep": "node perf-deep.js",
+    "findings": "node perf-findings.js",
+    "report": "node perf-report.js",
+    "all": "node perf-all.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}

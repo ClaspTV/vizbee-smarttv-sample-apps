@@ -37,6 +37,10 @@ export class Router {
   }
 
   start(defaultPath = '/home'): void {
+    window.addEventListener('hashchange', () => {
+      const path = this.pathFromLaunchHash();
+      if (path && path !== this.currentPath) this.go(path);
+    });
     this.go(this.pathFromLaunchHash() ?? defaultPath);
   }
 

@@ -87,6 +87,9 @@ export default defineConfig(({ mode }) => {
   // (set by the ship:<platform>:npm:<module> scripts). Empty for script builds,
   // which load the SDK via an external <script> at runtime instead.
   const sdkNpmPackage = process.env.VIZBEE_SDK_NPM_PACKAGE ?? '';
+  // Perf baseline: VZB_ENABLED=false builds the app with Vizbee continuity init
+  // gated off (the "without Vizbee" case). Defaults on for every normal build.
+  const vzbEnabled = process.env.VZB_ENABLED !== 'false';
 
   return {
     base: './',
@@ -96,6 +99,7 @@ export default defineConfig(({ mode }) => {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
       __SDK_NPM_PACKAGE__: JSON.stringify(sdkNpmPackage),
       __APP_VERSION__: JSON.stringify(APP_VERSION),
+      __VZB_ENABLED__: JSON.stringify(vzbEnabled),
     },
     resolve: {
       alias: {

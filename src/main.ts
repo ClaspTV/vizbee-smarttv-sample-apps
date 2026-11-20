@@ -104,7 +104,12 @@ async function boot(): Promise<void> {
   installViewportScale();
   startApp(rootEl, router);
 
-  requestAnimationFrame(() => requestAnimationFrame(() => grafana.markFirstRender()));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      performance.mark('vzb:first-render');
+      grafana.markFirstRender();
+    }),
+  );
 
   // webOS delivers remote BACK as a history popstate; install the
   // popstate→BACK bridge after the first route so BACK handlers catch it.

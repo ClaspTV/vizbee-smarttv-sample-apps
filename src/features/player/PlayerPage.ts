@@ -25,6 +25,11 @@ export function renderPlayerPage(
   videoEl.preload = 'auto';
   videoEl.autoplay = true;
   const detachSource = attachVideoSource(videoEl, video.videoUrl);
+  videoEl.addEventListener(
+    'playing',
+    () => console.log(`[VZBPERF] video playing ${video.id}`),
+    { once: true },
+  );
   // Explicit play() backs up the autoplay attribute — TV browsers vary on whether
   // it fires after a hash-route nav where the click's gesture context is consumed.
   videoEl.play().catch((e) => console.warn('autoplay rejected', e?.name, e?.message));

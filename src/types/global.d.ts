@@ -47,6 +47,9 @@ declare global {
 
   // App version (from package.json), injected by Vite (define).
   const __APP_VERSION__: string;
+
+  // Whether Vizbee continuity init runs; false in the perf "without Vizbee" build.
+  const __VZB_ENABLED__: boolean;
 }
 
 // The HomeSSO SDK types window.vizbee as VizbeeNamespace (already carrying
