@@ -21,7 +21,21 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
   const orNa = (/** @type {number | null} */ x) => (x == null ? 'n/a' : x.toFixed(0));
 
   doc.title(`Vizbee SDK perf - ${meta.platform}`);
-  doc.line(`${meta.date}    home ${meta.homeMs / 1000}s + playback ${meta.playMs / 1000}s per run`, 9);
+  const runs = summary.cases[keys[0]]?.n ?? '';
+  doc.line(
+    `Run date ${meta.date}  ·  ${runs} runs per case  ·  each run sampled ~${Math.round(meta.homeMs / 1000)}s on home (idle) + ~${Math.round(meta.playMs / 1000)}s during playback`,
+    9,
+  );
+  if (meta.device && Object.keys(meta.device).length) {
+    doc.gap(3);
+    doc.heading('Device & run');
+    /** @type {import('./pdf.js').Column[]} */
+    const devCols = [['Field', 170], ['Value', 390]];
+    /** @type {string[][]} */
+    const devRows = Object.entries(meta.device).map(([k, v]) => [k, String(v)]);
+    doc.table(devCols, devRows);
+    doc.gap(3);
+  }
   for (const s of [
     'What this measures: the CPU and memory the Vizbee JS SDK (elementless npm variant) adds to the TV app.',
     'Cases: without Vizbee (baseline) | with Vizbee, no sender connected | with Vizbee, a phone sender connected.',

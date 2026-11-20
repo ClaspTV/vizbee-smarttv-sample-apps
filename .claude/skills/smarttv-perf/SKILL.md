@@ -1,6 +1,6 @@
 ---
 name: smarttv-perf
-description: Measure the Vizbee JS SDK's cost in CPU and memory on smart-TV web platforms (Vizio, LG webOS, Samsung Tizen) - on the home page (idle) and during video playback - in three cases (without Vizbee, with Vizbee and no sender connected, with Vizbee and a phone sender connected), using the elementless npm SDK variant, and produce report.pdf (numbers), analysis.pdf (findings by criticality), issues.pdf (findings by metric) and deep-dive PDFs (cpu, memory - by function and source line). Web vitals (FCP/LCP/...) come from Grafana, not re-captured here. Use when asked to run perf, measure SDK overhead, compare with/without Vizbee, or profile CPU/memory for the sample web app.
+description: Measure the Vizbee JS SDK's cost in CPU and memory on smart-TV web platforms (Vizio, LG webOS, Samsung Tizen) - on the home page (idle) and during video playback - in three cases (without Vizbee, with Vizbee and no sender connected, with Vizbee and a phone sender connected), using the elementless npm SDK variant, and produce report.pdf (numbers), analysis.pdf (findings by criticality), issues.pdf (findings by metric) and deep-dive PDFs (cpu, memory - by function and source line). Web vitals (FCP/LCP/TTFB) are captured directly in-page over CDP (a render proxy on platforms like Vizio that emit no native paint/LCP). Use when asked to run perf, measure SDK overhead, compare with/without Vizbee, or profile CPU/memory for the sample web app.
 ---
 
 # Smart TV perf: CPU + memory (Vizbee JS SDK)
@@ -11,7 +11,7 @@ platforms; only the attach differs. Guide: `docs/performance-e2e.md`.
 
 | | |
 |---|---|
-| Metrics | CPU (main-thread), memory; web vitals via Grafana. Nothing else. |
+| Metrics | CPU (main-thread), memory, web vitals (FCP/LCP/TTFB captured in-page over CDP; render proxy where no native paint/LCP). |
 | Cases | Without Vizbee · With Vizbee (no sender) · With Vizbee (sender connected) |
 | Phases | Home/idle 180s · Playback 180s (hash deep-link, no casting) |
 | Variant | Elementless npm SDK (`@vizbeetv/sdk/<plat>-el`) |
@@ -66,10 +66,11 @@ Options (env / flags):
 
 ## 3. Outputs
 
-Written to `perf/perf-results/<timestamp>/`:
-- `report.pdf` — numbers (metric × case + costs), per-run table, tools used, method
-- `summary.md`, `results.json` — same data
-- `samples.jsonl` — every raw sample (rebuild any report: `node perf-report.js <dir>`)
+Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningful, per-platform):
+- `report.pdf` — a **Device & run** table at the top (model, firmware/OS, board, screen, SDK variant, run date), then numbers (metric × case + costs), per-run table, tools used, method
+- `device.json` — captured device details (Vizio over CDP, webOS via `ares-device -i`, Tizen via `sdb capability`); the report reads this; edit it to correct/add fields
+- `summary.md`, `results.json` — same numbers
+- `samples.jsonl` — every raw sample incl. the `vitals` phase (rebuild any report: `node perf-report.js <dir>` — it reads `device.json` and derives the run date from sample timestamps)
 - `deep/cpu.pdf`, `deep/memory.pdf` (+ cpu.json, heap.json)
 - `analysis.pdf`, `issues.pdf` — from a `findings.json` you add to the run dir
   (see `perf/findings.example.json`); then `node perf-findings.js <dir>`

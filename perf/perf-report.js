@@ -42,9 +42,27 @@ function main() {
   const byCase = loadRuns(jsonl);
   const summary = summarize(byCase);
   const firstCase = Object.values(byCase)[0];
+  const deviceFile = path.join(dir, 'device.json');
+  const device = fs.existsSync(deviceFile) ? JSON.parse(fs.readFileSync(deviceFile, 'utf8')) : null;
+  const ts = fs
+    .readFileSync(jsonl, 'utf8')
+    .trim()
+    .split('\n')
+    .map((l) => {
+      try {
+        return JSON.parse(l).t;
+      } catch {
+        return null;
+      }
+    })
+    .filter((t) => typeof t === 'number');
+  const runDate = ts.length
+    ? new Date(Math.min(...ts)).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
   const meta = {
     platform,
-    date: new Date().toISOString().slice(0, 10),
+    date: runDate,
+    device,
     homeMs: phaseSpanMs(firstCase, 'home'),
     playMs: phaseSpanMs(firstCase, 'play'),
   };

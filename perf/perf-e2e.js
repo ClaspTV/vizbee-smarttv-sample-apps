@@ -12,6 +12,7 @@ import { getPlatform } from './lib/platforms.js';
 import { runCase } from './lib/runner.js';
 import { summarize, textTable } from './lib/report.js';
 import { buildReportPdf } from './lib/pdf-report.js';
+import { captureDeviceInfo } from './lib/deviceinfo.js';
 
 /**
  * End-to-end perf run. Vizio is validated; webOS/Tizen share the code path but
@@ -56,9 +57,15 @@ async function main() {
   console.log('preflight OK');
   if (has('--check')) return;
 
+  const runDate = new Date().toISOString().slice(0, 10);
   const outRoot =
     process.env.PERF_OUT_DIR ??
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'perf-results', stamp());
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      'perf-results',
+      `vizbee-sdk-perf-${runDate}`,
+      platform.key,
+    );
   fs.mkdirSync(outRoot, { recursive: true });
   const raw = fs.createWriteStream(path.join(outRoot, 'samples.jsonl'), { flags: 'a' });
   /** @param {Record<string, unknown>} rec */
@@ -115,6 +122,22 @@ async function main() {
   const table = textTable(s, CASES);
   console.log('\n' + table);
 
+  // best-effort device details for the report's "Device & run" table (all platforms)
+  const capDev = makeDevice(platform, devOpts);
+  const device = await captureDeviceInfo(platform, {
+    dev: capDev,
+    device: devOpts.device,
+    serial: process.env.TIZEN_SERIAL,
+    npmPackage: pkg,
+    withVizbee: true,
+  }).catch(() => null);
+  try {
+    capDev.close?.();
+  } catch {
+    /* ignore */
+  }
+  if (device) fs.writeFileSync(path.join(outRoot, 'device.json'), JSON.stringify(device, null, 2));
+
   fs.writeFileSync(path.join(outRoot, 'results.json'), JSON.stringify({ cases: s.cases, costs: s.costs }, null, 2));
   fs.writeFileSync(path.join(outRoot, 'summary.md'), `# Vizbee SDK perf (${platform.label})\n\n\`\`\`\n${table}\n\`\`\`\n`);
   fs.writeFileSync(
@@ -123,7 +146,7 @@ async function main() {
       summary: s,
       byCase,
       caseDefs: CASES,
-      meta: { platform: platform.label, date: new Date().toISOString().slice(0, 10), homeMs: HOME_MS, playMs: PLAY_MS },
+      meta: { platform: platform.label, date: runDate, device, homeMs: HOME_MS, playMs: PLAY_MS },
     }),
   );
   console.log(`\nresults: ${outRoot}`);

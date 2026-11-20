@@ -10,7 +10,7 @@ Runs on bare Node 22 — no install needed except for `npm run check` (type-chec
 | | |
 |---|---|
 | Metrics | CPU (main-thread, CDP TaskDuration) · memory (JS heap, last-60s avg) |
-| Web vitals | From Grafana (FCP/LCP/...); not re-captured here |
+| Web vitals | FCP/LCP/TTFB captured in-page over CDP (render proxy on platforms with no native paint/LCP, e.g. Vizio) |
 | Cases | without Vizbee · with Vizbee no sender · with Vizbee sender connected |
 | Phases | home/idle 180s · playback 180s (hash deep-link into `/player/<id>`) |
 | Runs | 3 per case, videos rotated in a fixed order (so run i is paired across cases) |
@@ -74,11 +74,18 @@ npm run check                         # type-check (needs `npm install` here onc
 Flags/env: `--platform vizio|webos|tizen` · `--es6` · `--sender` · `PERF_RUNS` ·
 `PERF_HOME_MS` / `PERF_PLAY_MS` · `PERF_PROFILE_MS` · `VIZIO_IP` · `PERF_OUT_DIR`.
 
-## Outputs (`perf/perf-results/<timestamp>/`)
+## Outputs (`perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/`)
 
-`report.pdf`, `summary.md`, `results.json`, `samples.jsonl`, `deep/{cpu,memory}.pdf`,
-and `analysis.pdf` / `issues.pdf` (from a `findings.json` you drop in — template at
+Folder is meaningful + per-platform (not a raw timestamp). Contents:
+`report.pdf` (starts with a **Device & run** table — model, firmware/OS, board, screen,
+SDK variant, run date — captured into `device.json`), `summary.md`, `results.json`,
+`samples.jsonl` (includes the `vitals` phase), `deep/{cpu,memory}.pdf`, and
+`analysis.pdf` / `issues.pdf` (from a `findings.json` you drop in — template at
 `perf/findings.example.json`).
+
+`device.json` is auto-captured per platform (Vizio over CDP, webOS via `ares-device -i`,
+Tizen via `sdb capability`); `node perf-report.js <dir>` reads it and derives the run
+date from the sample timestamps when rebuilding a report.
 
 ## Module map (`perf/lib/`)
 

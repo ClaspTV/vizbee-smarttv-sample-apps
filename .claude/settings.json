@@ -129,7 +129,19 @@
       "Bash(curl -s --max-time 8 \"https://config.claspws.tv/api/v2/apps/vzb2057833111/screen/vizio_smartcast?cb=$\\(date +%s\\)\" -o /tmp/vzbcfg2.json)",
       "Bash(node -e \"const c=require\\('/tmp/vzbcfg2.json'\\); const it=c.data&&c.data.items&&c.data.items[0]||{}; console.log\\('syncInfo:', JSON.stringify\\(it.syncInfo\\)\\); console.log\\('has channelKeys sub_key:', !!\\(it.channelKeys&&it.channelKeys.sub_key\\)\\); console.log\\('sub_key:', it.channelKeys&&it.channelKeys.sub_key\\);\")",
       "Bash(node perf/perf-findings.js perf/perf-results/vizbee-sdk-perf-2026-11-20/lg-webos --platform LG)",
-      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('@vizbeetv/sdk =', \\(p.dependencies&&p.dependencies['@vizbeetv/sdk']\\)||\\(p.devDependencies&&p.devDependencies['@vizbeetv/sdk']\\)\\);\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('@vizbeetv/sdk =', \\(p.dependencies&&p.dependencies['@vizbeetv/sdk']\\)||\\(p.devDependencies&&p.devDependencies['@vizbeetv/sdk']\\)\\);\")",
+      "Bash(node -e 'const fs=require\\('\\\\''fs'\\\\''\\);const L=fs.readFileSync\\('\\\\''__TRACKED_VAR__'\\\\'','\\\\''utf8'\\\\''\\).trim\\(\\).split\\('\\\\''\\\\n'\\\\''\\).map\\(JSON.parse\\);const by={};for\\(const s of L\\){const k=s.case+'\\\\''/'\\\\''+s.phase;by[k]=\\(by[k]||0\\)+1;}console.log\\(by\\);')",
+      "Bash(node -e \"const p=require\\('./package.json'\\);for\\(const k in p.scripts\\)if\\(/tizen|wgt|samsung|package/i.test\\(k\\)\\)console.log\\('  '+k+': '+p.scripts[k]\\)\")",
+      "Bash(grep -iB1 'active=\"true\"')",
+      "Bash(node -e \"const fs=require\\('fs'\\);const x=fs.readFileSync\\(process.env.HOME+'/tizen-studio-data/profile/profiles.xml','utf8'\\);const m=x.match\\(/<profile name=\\\\\"\\([^\\\\\"]+\\)\\\\\"[^>]*active=\\\\\"true\\\\\"/i\\);console.log\\('active profile:', m?m[1]:'\\(none explicitly active\\)'\\);\")",
+      "Bash(node /private/tmp/claude-501/-Users-venkats-vizbee-git-vizbee-apps-vizbee-sample-webapp/7c30b874-99c5-45c2-898f-4141d84a707e/scratchpad/check-certs.mjs)",
+      "Bash(unzip -l VizbeeTizenSampleApp.wgt)",
+      "Bash(unzip -p VizbeeTizenSampleApp.wgt author-signature.xml)",
+      "Bash(ares-device -i -d lg2023)",
+      "Bash(node perf/perf-report.js perf/perf-results/vizbee-sdk-perf-2026-11-20/vizio-smartcast --platform Vizio)",
+      "Bash(node perf/perf-report.js perf/perf-results/vizbee-sdk-perf-2026-11-20/lg-webos --platform LG)",
+      "Bash(pdftotext perf/perf-results/vizbee-sdk-perf-2026-11-20/vizio-smartcast/report.pdf -)",
+      "Bash(pdftotext perf/perf-results/vizbee-sdk-perf-2026-11-20/lg-webos/report.pdf -)"
     ]
   }
 }
