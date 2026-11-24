@@ -34,6 +34,9 @@ declare global {
       VERSION?: string;
       [key: string]: unknown;
     };
+    __perf?: {
+      router: import('../app/Router').Router;
+    };
   }
 
   // Xbox / UWP: defined globally on Windows TVs; declared loosely here.
@@ -50,6 +53,16 @@ declare global {
 
   // Whether Vizbee continuity init runs; false in the perf "without Vizbee" build.
   const __VZB_ENABLED__: boolean;
+
+  // Whether Mux Data monitoring runs; true only in the perf "with Mux" build.
+  const __MUX_ENABLED__: boolean;
+
+  // Mux Data env key for the "with Mux" build; '' when unset.
+  const __MUX_ENV_KEY__: string;
+
+  // Exposes window.__perf.router for the long-playback perf harness; false
+  // (dead-code-eliminated) in every normal build. Set by PERF_HOOKS=true.
+  const __PERF_HOOKS__: boolean;
 }
 
 // The HomeSSO SDK types window.vizbee as VizbeeNamespace (already carrying

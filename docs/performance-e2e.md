@@ -95,9 +95,35 @@ local serve) · `platforms.js` · `cases.js` · `preflight.js` · `runner.js` (p
 `report.js` (math + jsonl loader) · `pdf.js` (zero-dep writer) · `pdf-report.js` ·
 `profile.js` (Profiler/HeapProfiler) · `pdf-deep.js` · `findings.js` · `phone.js` (sender).
 
+## Mux comparison (without Mux vs with Mux)
+
+Measures what **Mux Data (mux-embed) monitoring** costs in CPU + memory — **no Vizbee
+SDK in either case**, so Mux is isolated against the pure baseline.
+
+- Build flag `MUX_ENABLED` (Vite define `__MUX_ENABLED__`, plus `__MUX_ENV_KEY__` from
+  `MUX_ENV_KEY`). In the "with Mux" build, `src/services/mux/mux.ts` loads mux-embed
+  from CDN and calls `mux.monitor(...)` on the player (hls.js or native). The guard
+  tree-shakes the whole Mux path out of the "without Mux" build.
+- Cases reuse the `without` / `nosender` keys so `costs.sdk` = **Mux cost**
+  (with Mux − without Mux, paired per video). The report relabels them "Without Mux" /
+  "With Mux" and the cost line "Mux cost".
+
+Run (per platform):
+
+```bash
+cd perf
+MUX_ENV_KEY=<your Mux Data env key> node perf-mux.js --platform vizio
+MUX_ENV_KEY=<your Mux Data env key> node perf-mux.js --platform webos
+MUX_ENV_KEY=<your Mux Data env key> node perf-mux.js --platform tizen
+```
+
+Output: `perf-results/mux-perf-<run-date>/<platform>/` (report.pdf, results.json,
+summary.md, samples.jsonl, device.json). Without `MUX_ENV_KEY` it still runs (measures
+mux-embed load + monitor cost) but sends no data to Mux.
+
 ## Extending
 
 - **New platform**: add to `platforms.js` + a `device/<plat>.js` with the same
   interface (`attach/navigate/reload/reachable/pageTarget/close`).
-- **Another SDK (e.g. Mux)**: build a variant that injects it at build time and add a
-  case; compare without vs with, no Vizbee.
+- **Another SDK**: mirror the Mux pattern — a build flag + a small service gated on it,
+  plus a `perf-<sdk>.js` that builds without/with and reuses the report.

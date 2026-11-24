@@ -1,4 +1,5 @@
 import { defineConfig, Plugin } from 'vite';
+import legacy from '@vitejs/plugin-legacy';
 import { fileURLToPath, URL } from 'node:url';
 import { readFileSync } from 'node:fs';
 
@@ -14,8 +15,12 @@ const APP_VERSION: string = JSON.parse(
 // Modes: 'viziosmartcast' | 'tizen' | 'webos' | 'xbox' | 'desktop'.
 // `vite dev` defaults to mode 'development', which we map to 'desktop'.
 //
-// Target ES2017 for older TV browser engines (Tizen 5, webOS 4, Vizio
-// SmartCast, Xbox Edge); newer engines work fine.
+// Target ES2015 for older TV browser engines. The binding constraint is
+// webOS 4 (Chromium 53): async/await is native in ES2017 but didn't ship
+// until Chrome 55, so an ES2017 bundle throws SyntaxError on parse there and
+// renders a grey screen. ES2015 down-levels async/await to generators, which
+// Chromium 53 supports; every newer engine (Tizen 5, Vizio, Xbox, webOS 5+)
+// handles it fine.
 const PLATFORM_MODES = new Set(['viziosmartcast', 'tizen', 'webos', 'xbox', 'firetv', 'desktop']);
 const VIZIO_COMPANION_LIB_URL = 'http://localhost:12345/scfs/cl/js/vizio-companion-lib.js';
 
@@ -90,6 +95,8 @@ export default defineConfig(({ mode }) => {
   // Perf baseline: VZB_ENABLED=false builds the app with Vizbee continuity init
   // gated off (the "without Vizbee" case). Defaults on for every normal build.
   const vzbEnabled = process.env.VZB_ENABLED !== 'false';
+  const muxEnabled = process.env.MUX_ENABLED === 'true';
+  const muxEnvKey = process.env.MUX_ENV_KEY ?? '';
 
   return {
     base: './',
@@ -100,6 +107,9 @@ export default defineConfig(({ mode }) => {
       __SDK_NPM_PACKAGE__: JSON.stringify(sdkNpmPackage),
       __APP_VERSION__: JSON.stringify(APP_VERSION),
       __VZB_ENABLED__: JSON.stringify(vzbEnabled),
+      __MUX_ENABLED__: JSON.stringify(muxEnabled),
+      __MUX_ENV_KEY__: JSON.stringify(muxEnvKey),
+      __PERF_HOOKS__: JSON.stringify(process.env.PERF_HOOKS === 'true'),
     },
     resolve: {
       alias: {
@@ -112,9 +122,24 @@ export default defineConfig(({ mode }) => {
         ),
       },
     },
-    plugins: [vizioCompanionScript(platform), tizenWebapisScript(platform), webosTvScript(platform)],
+    plugins: [
+      vizioCompanionScript(platform),
+      tizenWebapisScript(platform),
+      webosTvScript(platform),
+      // Legacy (nomodule) bundle for pre-ES-module TV engines. Vite's default
+      // output is <script type="module">, which only Chromium 61+ runs; webOS 4
+      // is Chromium 53, so it silently ignores the module script and renders a
+      // grey screen. plugin-legacy emits a SystemJS <script nomodule> fallback
+      // (loaded precisely by engines without module support) plus core-js
+      // polyfills for the Web APIs missing on these old engines. Modern TVs keep
+      // the module build. Skipped for the desktop dev target. targets drives the
+      // polyfill set; Chromium 53 (webOS 4) is the oldest engine we ship to.
+      ...(platform === 'desktop'
+        ? []
+        : [legacy({ targets: ['chrome >= 53'], modernPolyfills: true })]),
+    ],
     build: {
-      target: 'es2017',
+      target: 'es2015',
       outDir: `dist/${platform}`,
       assetsDir: 'assets',
       emptyOutDir: true,

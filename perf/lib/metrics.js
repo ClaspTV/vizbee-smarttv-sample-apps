@@ -29,16 +29,36 @@ function pick(metrics, name) {
  * @returns {Promise<Sample>}
  */
 export async function sample(cdp) {
-  const res = await cdp.send('Performance.getMetrics');
-  /** @type {Metric[]} */
-  const metrics = res?.metrics ?? [];
+  try {
+    const res = await cdp.send('Performance.getMetrics');
+    /** @type {Metric[]} */
+    const metrics = res?.metrics ?? [];
+    if (metrics.length) {
+      return {
+        t: Date.now(),
+        taskDuration: pick(metrics, 'TaskDuration'),
+        jsHeapUsed: pick(metrics, 'JSHeapUsedSize'),
+        jsHeapTotal: pick(metrics, 'JSHeapTotalSize'),
+        nodes: pick(metrics, 'Nodes'),
+        listeners: pick(metrics, 'JSEventListeners'),
+      };
+    }
+  } catch {
+    /* Performance domain absent (webOS 4 / Chromium 53) - fall back below */
+  }
+  const raw = await cdp
+    .evaluate(
+      "JSON.stringify({u:(window.performance&&performance.memory&&performance.memory.usedJSHeapSize)||0,h:(window.performance&&performance.memory&&performance.memory.totalJSHeapSize)||0,n:document.getElementsByTagName('*').length})",
+    )
+    .catch(() => null);
+  const o = raw ? JSON.parse(raw) : {};
   return {
     t: Date.now(),
-    taskDuration: pick(metrics, 'TaskDuration'),
-    jsHeapUsed: pick(metrics, 'JSHeapUsedSize'),
-    jsHeapTotal: pick(metrics, 'JSHeapTotalSize'),
-    nodes: pick(metrics, 'Nodes'),
-    listeners: pick(metrics, 'JSEventListeners'),
+    taskDuration: 0,
+    jsHeapUsed: o.u || 0,
+    jsHeapTotal: o.h || 0,
+    nodes: o.n || 0,
+    listeners: 0,
   };
 }
 
@@ -118,7 +138,11 @@ export async function captureWebVitals(cdp) {
 export async function sampleFor(cdp, durationMs, intervalMs, onSample) {
   /** @type {Sample[]} */
   const out = [];
-  await cdp.send('Performance.enable');
+  try {
+    await cdp.send('Performance.enable');
+  } catch {
+    /* Performance domain absent (webOS 4) - sample() falls back to evaluate */
+  }
   const end = Date.now() + durationMs;
   while (Date.now() < end) {
     const s = await sample(cdp);

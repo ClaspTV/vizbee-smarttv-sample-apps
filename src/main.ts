@@ -104,6 +104,10 @@ async function boot(): Promise<void> {
   installViewportScale();
   startApp(rootEl, router);
 
+  if (__PERF_HOOKS__) {
+    window.__perf = { router };
+  }
+
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       performance.mark('vzb:first-render');

@@ -1,6 +1,7 @@
 import { findVideo } from '@/data/videos';
 import { services } from '@/services/ServiceContainer';
 import { createFocusableButton } from '@/components/FocusableButton';
+import { attachMuxMonitor } from '@/services/mux/mux';
 
 const SEEK_STEP_SEC = 10;
 
@@ -24,7 +25,7 @@ export function renderPlayerPage(
   videoEl.poster = video.posterUrl;
   videoEl.preload = 'auto';
   videoEl.autoplay = true;
-  const detachSource = attachVideoSource(videoEl, video.videoUrl);
+  const detachSource = attachVideoSource(videoEl, video);
   videoEl.addEventListener(
     'playing',
     () => console.log(`[VZBPERF] video playing ${video.id}`),
@@ -358,11 +359,16 @@ export function renderPlayerPage(
 
 // HLS plays natively on Safari and most smart-TV browsers; desktop Chrome/Firefox/Edge
 // lazy-load HLS.js from a CDN. Returns a detach fn for cleanup.
-function attachVideoSource(videoEl: HTMLVideoElement, url: string): () => void {
+function attachVideoSource(
+  videoEl: HTMLVideoElement,
+  video: { id: string; title: string; videoUrl: string },
+): () => void {
+  const url = video.videoUrl;
   const isHls = /\.m3u8(\?|$)/i.test(url);
   const nativeHls = videoEl.canPlayType('application/vnd.apple.mpegurl') !== '';
   if (!isHls || nativeHls) {
     videoEl.src = url;
+    attachMuxMonitor(videoEl, { videoId: video.id, videoTitle: video.title });
     return () => {};
   }
   let hls: { destroy: () => void } | undefined;
@@ -370,12 +376,14 @@ function attachVideoSource(videoEl: HTMLVideoElement, url: string): () => void {
     .then((Hls) => {
       if (!Hls.isSupported()) {
         videoEl.src = url; // Last-ditch — will likely fail, but no worse.
+        attachMuxMonitor(videoEl, { videoId: video.id, videoTitle: video.title });
         return;
       }
       const instance = new Hls();
       instance.loadSource(url);
       instance.attachMedia(videoEl);
       hls = instance;
+      attachMuxMonitor(videoEl, { hls: instance, Hls, videoId: video.id, videoTitle: video.title });
     })
     .catch(() => {
       videoEl.src = url;

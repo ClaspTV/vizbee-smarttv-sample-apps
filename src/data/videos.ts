@@ -44,6 +44,28 @@ export const VIDEOS: readonly VideoInfo[] = [
     videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
     durationSec: 888,
   },
+  {
+    id: 'wwdc-2015',
+    isLive: false,
+    title: 'WWDC 2015 Session (34 min)',
+    description:
+      'Long-form HLS VOD (34 min) for sustained-playback and memory-leak perf runs.',
+    posterUrl: 'https://picsum.photos/seed/wwdc-2015/960/540',
+    videoUrl:
+      'https://devstreaming-cdn.apple.com/videos/wwdc/2015/413eflf3lrh1tyo/413/hls_vod_mvp.m3u8',
+    durationSec: 2040,
+  },
+  {
+    id: 'wwdc-2017',
+    isLive: false,
+    title: 'WWDC 2017 Keynote (103 min)',
+    description:
+      'Long-form HLS VOD (103 min) used as the long-playback fallback stream.',
+    posterUrl: 'https://picsum.photos/seed/wwdc-2017/960/540',
+    videoUrl:
+      'https://devstreaming-cdn.apple.com/videos/wwdc/2017/102xyar2647hak3e/102/hls_vod_mvp.m3u8',
+    durationSec: 6180,
+  },
 ];
 
 // Videos arriving at runtime (e.g. a Vizbee cast/deeplink) aren't in the

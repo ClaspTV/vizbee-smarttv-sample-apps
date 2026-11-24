@@ -143,7 +143,6 @@
 
 .rail__track {
   display: flex;
-  gap: var(--space-3);
   padding: var(--space-2) var(--safe-area-x) var(--space-3);
   overflow-x: auto;
   scroll-behavior: smooth;
@@ -158,4 +157,7 @@
 .rail__track > * {
   scroll-snap-align: start;
   flex: 0 0 auto;
+}
+.rail__track > * + * {
+  margin-left: var(--space-3);
 }

@@ -36,7 +36,7 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
     doc.table(devCols, devRows);
     doc.gap(3);
   }
-  for (const s of [
+  for (const s of meta.intro ?? [
     'What this measures: the CPU and memory the Vizbee JS SDK (elementless npm variant) adds to the TV app.',
     'Cases: without Vizbee (baseline) | with Vizbee, no sender connected | with Vizbee, a phone sender connected.',
     'Phases: home page idle, then video playback started by a deep link (no casting).',
@@ -68,7 +68,7 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
   }
 
   if (summary.costs.sdk) {
-    doc.heading('SDK cost  (no sender - without, paired per video)');
+    doc.heading(meta.sdkCostLabel ?? 'SDK cost  (no sender - without, paired per video)');
     const c = summary.costs.sdk;
     doc.line(`home: CPU ${c.homeCpu.toFixed(2)}%   mem ${c.homeMem.toFixed(1)} MB        play: CPU ${c.playCpu.toFixed(2)}%   mem ${c.playMem.toFixed(1)} MB   (n=${c.n})`);
   }

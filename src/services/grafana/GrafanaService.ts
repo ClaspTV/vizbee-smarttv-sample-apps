@@ -1,33 +1,48 @@
-import { getWebInstrumentations, initializeFaro } from '@grafana/faro-web-sdk';
-import { TracingInstrumentation } from '@grafana/faro-web-tracing';
 import type { Faro } from '@grafana/faro-web-sdk';
 
 export class GrafanaService {
   private faro: Faro | null = null;
   private firstRenderMarked = false;
+  private pendingRenderMs: number | null = null;
 
   start(): void {
-    this.faro = initializeFaro({
-      url: 'https://faro-collector-prod-us-east-2.grafana.net/collect/153ab205bac62e67c8ec0772dbabf62f',
-      app: {
-        name: 'Vizbee Demo App',
-        version: '1.0.0',
-        environment: 'production',
-      },
-      webVitalsInstrumentation: {
-        reportAllChanges: true,
-      },
-      instrumentations: [
-        ...getWebInstrumentations(),
-        new TracingInstrumentation(),
-      ],
-    });
+    void this.init();
   }
 
-  markFirstRender(): void {
-    if (this.firstRenderMarked || !this.faro) return;
+  private async init(): Promise<void> {
+    try {
+      const { getWebInstrumentations, initializeFaro } = await import('@grafana/faro-web-sdk');
+      const { TracingInstrumentation } = await import('@grafana/faro-web-tracing');
+      this.faro = initializeFaro({
+        url: 'https://faro-collector-prod-us-east-2.grafana.net/collect/153ab205bac62e67c8ec0772dbabf62f',
+        app: {
+          name: 'Vizbee Demo App',
+          version: '1.0.0',
+          environment: 'production',
+        },
+        webVitalsInstrumentation: {
+          reportAllChanges: true,
+        },
+        instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
+      });
+      if (this.pendingRenderMs !== null) {
+        const ms = this.pendingRenderMs;
+        this.pendingRenderMs = null;
+        this.markFirstRender(ms);
+      }
+    } catch {
+      this.faro = null;
+    }
+  }
+
+  markFirstRender(renderMsOverride?: number): void {
+    if (this.firstRenderMarked) return;
+    const renderMs = renderMsOverride ?? Math.round(performance.now());
+    if (!this.faro) {
+      if (this.pendingRenderMs === null) this.pendingRenderMs = renderMs;
+      return;
+    }
     this.firstRenderMarked = true;
-    const renderMs = Math.round(performance.now());
     this.faro.api.pushMeasurement({
       type: 'app-render',
       values: { first_render: renderMs },

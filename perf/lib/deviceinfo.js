@@ -2,6 +2,20 @@
 'use strict';
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** Resolved version of the installed @vizbeetv/sdk, or '' if unreadable. */
+function sdkInstalledVersion() {
+  try {
+    const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const pkg = JSON.parse(readFileSync(path.join(repo, 'node_modules/@vizbeetv/sdk/package.json'), 'utf8'));
+    return pkg.version || '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Best-effort device details for the report's "Device & run" table.
@@ -13,8 +27,9 @@ import { spawnSync } from 'node:child_process';
  * @returns {Promise<Record<string,string>>}
  */
 export async function captureDeviceInfo(platform, opts = {}) {
+  const ver = sdkInstalledVersion();
   const sdkVariant = opts.withVizbee
-    ? `${opts.npmPackage || 'script'} (elementless npm)`
+    ? `${opts.npmPackage || 'script'}${opts.npmPackage && ver ? ` @ ${ver}` : ''} (elementless npm)`
     : 'n/a (SDK stripped for baseline)';
   try {
     if (platform.key === 'vizio' && opts.dev) {

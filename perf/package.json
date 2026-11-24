@@ -9,6 +9,7 @@
     "test": "node --test",
     "smoke": "node perf-smoke.js",
     "e2e": "node perf-e2e.js",
+    "mux": "node perf-mux.js",
     "deep": "node perf-deep.js",
     "findings": "node perf-findings.js",
     "report": "node perf-report.js",

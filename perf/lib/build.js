@@ -26,7 +26,8 @@ export function lanIp() {
  *   npmPackage?: string,
  *   mode?: string,
  *   outDir: string,
- *   minify?: boolean
+ *   minify?: boolean,
+ *   perfHooks?: boolean
  * }} BuildOpts
  */
 
@@ -38,11 +39,23 @@ export function lanIp() {
  * @param {BuildOpts} opts
  * @returns {string} absolute path of the built dir
  */
-export function buildVariant({ withVizbee, npmPackage = '', mode = 'viziosmartcast', outDir, minify = true }) {
+export function buildVariant({
+  withVizbee,
+  npmPackage = '',
+  mode = 'viziosmartcast',
+  outDir,
+  minify = true,
+  mux = false,
+  muxEnvKey = '',
+  perfHooks = false,
+}) {
   const env = {
     ...process.env,
     VZB_ENABLED: withVizbee ? 'true' : 'false',
     VIZBEE_SDK_NPM_PACKAGE: withVizbee ? npmPackage : '',
+    MUX_ENABLED: mux ? 'true' : 'false',
+    MUX_ENV_KEY: muxEnvKey || process.env.MUX_ENV_KEY || '',
+    PERF_HOOKS: perfHooks ? 'true' : '',
   };
   const args = ['vite', 'build', '--mode', mode, '--outDir', outDir];
   if (!minify) args.push('--minify', 'false');

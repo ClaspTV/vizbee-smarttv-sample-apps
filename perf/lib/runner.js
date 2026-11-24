@@ -82,9 +82,11 @@ export async function runCase({
     const vitals = await captureWebVitals(cdp);
     writeSample({ case: case_.key, run, video: video.id, phase: 'vitals', ...vitals });
 
-    // Start playback as a fresh deep-link load: Router reads the launch hash on
-    // boot. A full load (not in-page hash nav) avoids any popstate -> BACK ->
-    // exit-modal path, so the run never trips the app's exit confirmation.
+    // Start playback as a fresh deep-link load: the Router reads the launch hash
+    // on boot, so each run starts from a clean boot (identical heap) — what the
+    // paired cost comparison needs. (BACK from the player goes straight to Home;
+    // the exit-confirm modal is only a hardware BACK on Home, which this never
+    // sends. The long run keeps one session instead — see perf/lib/long.js.)
     const playing = waitForMarker(cdp, '[VZBPERF] video playing', MARKER_TIMEOUT_MS);
     await dev.navigate(`${url}#/player/${video.id}`);
     await playing;

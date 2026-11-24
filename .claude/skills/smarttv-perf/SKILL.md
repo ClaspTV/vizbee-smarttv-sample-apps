@@ -56,8 +56,21 @@ Must end with `preflight OK`. On failure tell the user what printed:
 | "run perf" (default, Vizio) | `cd perf && node perf-all.js` | report + deep (cpu, memory) + analysis + issues |
 | "run perf quick" | `cd perf && node perf-e2e.js` | report only |
 | "why / what is taking CPU or memory" | `cd perf && node perf-deep.js` | cpu.pdf + memory.pdf |
+| "mux perf / cost of Mux" (no Vizbee; without-Mux vs with-Mux) | `cd perf && MUX_ENV_KEY=<key> node perf-mux.js [--platform vizio\|webos\|tizen]` | report (Mux cost) |
+| "long run / long playback / 20 min / 2 x 20 min / memory leak over playback" | `cd perf && node perf-long.js --platform webos [--sender]` | report (long) |
 
 Full run: 3 cases × 3 runs × (180s home + 180s playback) ≈ 35–40 min.
+
+Long run (`perf-long.js`): one built+served variant per case, then — per case —
+a warm-up playback, **10 min home** (`--idle 600`), then **2 playbacks of 20 min**
+(`--play 1200 --plays 2`), each followed by 30s home (`--after 30`). The leak
+signal is the per-playback **heap slope (MB/min)** over the whole 20-min playback
+(the web app reloads between phases, so memory is not retained across playbacks —
+unlike the Roku long run's single session). Long VODs (`LONG_VIDEOS` in `lib/cases.js`,
+also in `src/data/videos.ts` so the `#/player/<id>` deep-link resolves): WWDC 2015
+(34 min) primary, WWDC 2017 (103 min) fallback. `--dry-run` ≈ 5 min; `--report <dir>`
+rebuilds report.pdf/summary.md from `results.json`. Default platform is **webos**.
+Output: `perf-results/vizbee-sdk-long-<date>/<platform>/`.
 
 Options (env / flags):
 - `--platform vizio|webos|tizen` (default vizio)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)
@@ -82,8 +95,21 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
   (`perf/lib/device/webos.js`, `tizen.js`) follow ares-cli / sdb mechanics but are
   marked UNTESTED — validate the inspector attach on a real TV, then set
   `validated:true` in `perf/lib/platforms.js`.
-- **Sender case** (`--sender`) needs an Android phone with the Vizbee demo app over
-  adb (`perf/lib/phone.js`); the connect step is a stub to fill in on-device.
+- **Sender case** (`--sender`) needs an Android phone with the Vizbee demo app
+  (`tv.vizbee.demo`) over adb (`perf/lib/phone.js`); the connect step is a stub to
+  fill in on-device.
+- **The phone's Vizbee App ID must match the TV app's**, or the phone cannot pair
+  with the TV (they only find each other on the same appId). The TV app's id is
+  `vizbeeAppId` in `src/services/config/ConfigService.ts` (default `vzb2057833111`,
+  overridable in Settings → stored in localStorage). The phone keeps its id in the
+  demo app's shared pref `pref_vizbee_app_id` (read by `phone.js` `appId()`). To sync
+  the phone to the TV:
+  ```
+  adb shell am force-stop tv.vizbee.demo
+  adb shell "run-as tv.vizbee.demo sed -i 's/>OLD_ID</>vzb2057833111</' shared_prefs/tv.vizbee.demo_preferences.xml"
+  ```
+  then relaunch the demo app. Always confirm `phone.appId()` equals the TV's
+  `vizbeeAppId` before a sender run.
 
 ## Issues to look for (JS equivalents of the Roku findings)
 

@@ -28,6 +28,31 @@ export const VIDEOS = [
 ];
 
 /**
+ * Long-form VODs (> 20 min) for the long playback run (perf-long.js). The ids
+ * match the catalog entries in src/data/videos.ts, so a `#/player/<id>`
+ * deep-link resolves on the TV; url is for the preflight stream check.
+ * @type {Record<string, { id: string, title: string, url: string, durationSec?: number, isLive?: boolean }>}
+ */
+export const LONG_VIDEOS = {
+  'wwdc-2015': {
+    id: 'wwdc-2015',
+    title: 'WWDC 2015 Session (34 min)',
+    durationSec: 2040,
+    url: 'https://devstreaming-cdn.apple.com/videos/wwdc/2015/413eflf3lrh1tyo/413/hls_vod_mvp.m3u8',
+  },
+  'wwdc-2017': {
+    id: 'wwdc-2017',
+    title: 'WWDC 2017 Keynote (103 min)',
+    durationSec: 6180,
+    url: 'https://devstreaming-cdn.apple.com/videos/wwdc/2017/102xyar2647hak3e/102/hls_vod_mvp.m3u8',
+  },
+};
+
+/** Default long video and ordered fallbacks if it will not play. */
+export const LONG_VIDEO = 'wwdc-2015';
+export const LONG_FALLBACK = ['wwdc-2017'];
+
+/**
  * @typedef {{
  *   key: string,
  *   label: string,
