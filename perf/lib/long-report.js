@@ -56,20 +56,20 @@ const ROWS = /** @type {Array<[string, string, number, ((c: CaseResult) => numbe
   ['Home page', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => (c.home ? c.home.cpu : null), 'cpu'],
   ['Memory used', 'MB', 1, (c) => (c.home ? c.home.usedEndMB : null), 'mem'],
-  ['Memory allocated', 'MB', 1, (c) => (c.home ? c.home.allocMB : null), 'alloc'],
+  ['Memory allocated', 'MB', 2, (c) => (c.home ? c.home.allocMB : null), 'alloc'],
   ['Heap slope', 'MB/min', 2, (c) => (c.home ? c.home.slopeMBMin : null), 'mem'],
   ['Playback (median of the playbacks)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => p.play.cpu)), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedEndMB)), 'mem'],
   ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedPeakMB)), 'mem'],
-  ['Memory allocated', 'MB', 1, (c) => med(c.plays.map((p) => p.play.allocMB)), 'alloc'],
+  ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => p.play.allocMB)), 'alloc'],
   ['Heap slope (leak signal)', 'MB/min', 2, (c) => med(c.plays.map((p) => p.play.slopeMBMin)), 'mem'],
   ['Video start time (VST)', 's', 2, (c) => med(c.plays.map((p) => p.vstSecs)), 'vst'],
   ['Dropped frames', '%', 2, (c) => droppedPctFor(c.plays), 'frames'],
   ['Home page after each playback (median)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.cpu : null))), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedEndMB : null))), 'mem'],
-  ['Memory allocated', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.allocMB : null))), 'alloc'],
+  ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.allocMB : null))), 'alloc'],
 ]);
 
 /**

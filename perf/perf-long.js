@@ -70,6 +70,7 @@ async function main() {
     video: argVal('--video') ?? LONG_VIDEO,
     fallbacks: argVal('--fallback') ? csv(/** @type {string} */ (argVal('--fallback'))) : LONG_FALLBACK,
     videos: LONG_VIDEOS,
+    allowReload: has('--allow-reload'),
   };
   if (!LONG_VIDEOS[o.video]) throw new Error(`unknown --video "${o.video}" (${Object.keys(LONG_VIDEOS).join(', ')})`);
   if (!longEnough(LONG_VIDEOS[o.video], o.play)) {

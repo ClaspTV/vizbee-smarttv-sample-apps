@@ -82,16 +82,25 @@ Full run: 3 cases × 3 runs × (180s home + 180s playback) ≈ 35–40 min.
 Long run (`perf-long.js`): one built+served variant per case, then — per case —
 a warm-up playback, **10 min home** (`--idle 600`), then **2 playbacks of 20 min**
 (`--play 1200 --plays 2`), each followed by 30s home (`--after 30`). The leak
-signal is the per-playback **heap slope (MB/min)** over the whole 20-min playback
-(the web app reloads between phases, so memory is not retained across playbacks —
-unlike the Roku long run's single session). Long VODs (`LONG_VIDEOS` in `lib/cases.js`,
+signal is the per-playback **heap slope (MB/min)** over the whole 20-min playback.
+
+**Single session (no reloads) — required.** Phases move home↔player **in-page**
+through the app router (`window.__perf.router`, exposed only when the build is
+compiled with `PERF_HOOKS=true`), so the JS heap carries across playbacks like the
+Roku long run. **The `ship:*:npm:*` scripts bake `PERF_HOOKS=true` into the hosted
+builds** for exactly this reason — the TV loads the hosted build, so the hook must
+be in it. If the loaded build lacks the hook the long run **aborts immediately**
+(before the multi-hour phases) with a message to redeploy with `PERF_HOOKS=true`;
+pass `--allow-reload` to run anyway (full reloads re-initialise the SDK each phase,
+which **inflates post-reload home CPU** — a measurement artifact, not an SDK cost —
+and breaks single-session memory). Long VODs (`LONG_VIDEOS` in `lib/cases.js`,
 also in `src/data/videos.ts` so the `#/player/<id>` deep-link resolves): WWDC 2015
 (34 min) primary, WWDC 2017 (103 min) fallback. `--dry-run` ≈ 5 min; `--report <dir>`
 rebuilds report.pdf/summary.md from `results.json`. Default platform is **webos**.
 Output: `perf-results/vizbee-sdk-long-<date>/<platform>/`.
 
 Options (env / flags):
-- `--platform vizio|webos|tizen` (default vizio)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)
+- `--platform vizio|webos|tizen` (default vizio)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
 - `PERF_RUNS=N`  ·  `PERF_HOME_MS` / `PERF_PLAY_MS` (ms)  ·  `VIZIO_IP=<ip>`
 - `PERF_PROFILE_MS` (deep-dive profile length)
 

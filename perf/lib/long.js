@@ -142,7 +142,7 @@ export function phaseStats(samples) {
  * @param {{
  *   idle: number, play: number, plays: number, after: number, warmup: number,
  *   video: string, fallbacks: string[], videos: Record<string, LongVideo>,
- *   phone?: import('./phone.js').Phone | null, tvName?: string
+ *   phone?: import('./phone.js').Phone | null, tvName?: string, allowReload?: boolean
  * }} p.o
  * @param {(line: string) => void} p.log
  * @param {(rec: Record<string, unknown>) => void} p.writeSample
@@ -247,6 +247,11 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
   await bootHome();
   inPage = await cdp.evaluate('!!(window.__perf && window.__perf.router)').catch(() => false);
   if (!inPage) {
+    if (!o.allowReload) {
+      throw new Error(
+        'perf router hook (__PERF_HOOKS__) absent in the loaded build: the long run would fall back to full reloads (re-initialising the SDK each phase, which inflates post-reload CPU and breaks single-session memory). Ship the hosted build with PERF_HOOKS=true (the ship:*:npm:* scripts already do), or pass --allow-reload to run anyway. Aborting before the long run wastes hours.',
+      );
+    }
     r.notes.push(
       'perf router hook (__PERF_HOOKS__) absent in this build; used full reloads between phases, so memory does not carry across playbacks',
     );
