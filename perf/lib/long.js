@@ -11,6 +11,7 @@ import {
   stopCpuProfile,
   startHeapSampling,
   stopHeapSampling,
+  forceGc,
 } from './metrics.js';
 import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
 
@@ -62,7 +63,9 @@ import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
  *   notes: string[],
  *   failed?: string,
  *   home: PhaseResult | null,
- *   plays: PlayResult[]
+ *   plays: PlayResult[],
+ *   disconnected?: PhaseResult | null,
+ *   disconnectConfirmed?: boolean | null
  * }} CaseResult
  */
 
@@ -142,7 +145,8 @@ export function phaseStats(samples) {
  * @param {{
  *   idle: number, play: number, plays: number, after: number, warmup: number,
  *   video: string, fallbacks: string[], videos: Record<string, LongVideo>,
- *   phone?: import('./phone.js').Phone | null, tvName?: string, allowReload?: boolean
+ *   phone?: import('./phone.js').Phone | null, tvName?: string, allowReload?: boolean,
+ *   discIdle?: number
  * }} p.o
  * @param {(line: string) => void} p.log
  * @param {(rec: Record<string, unknown>) => void} p.writeSample
@@ -331,9 +335,25 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
 
   if (case_.sender && o.phone) {
     try {
+      await gotoHome();
       await o.phone.ensureDisconnected();
-    } catch {
-      /* ignore */
+      await sleep(3000);
+      const st = o.phone.castState ? o.phone.castState() : null;
+      r.disconnectConfirmed = st !== 'connected';
+      if (!r.disconnectConfirmed) {
+        r.notes.push('sender still shows connected after the disconnect attempt; the return-to-normal read may be invalid');
+      } else {
+        log(`${case_.label}: sender disconnected (confirmed) - measuring return-to-normal on the home page`);
+      }
+      await forceGc(cdp);
+      const ms = (o.discIdle ?? 120) * 1000;
+      r.disconnected = await capturePhase(ms, (s) =>
+        writeSample({ case: case_.key, phase: 'disconnected', video, ...s }),
+      );
+      log(`  RESULT ${case_.label}, after sender disconnect ${Math.round(ms / 1000)}s: ${phaseLine(r.disconnected)}`);
+      onProgress(r);
+    } catch (e) {
+      r.notes.push(`disconnect / return-to-normal check failed: ${/** @type {Error} */ (e).message}`);
     }
   }
   return r;

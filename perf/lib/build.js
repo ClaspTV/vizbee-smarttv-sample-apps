@@ -29,6 +29,8 @@ export function lanIp() {
  *   mode?: string,
  *   outDir: string,
  *   minify?: boolean,
+ *   mux?: boolean,
+ *   muxEnvKey?: string,
  *   perfHooks?: boolean
  * }} BuildOpts
  */

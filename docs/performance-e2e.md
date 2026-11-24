@@ -78,13 +78,14 @@ node perf-all.js                      # full run: e2e + deep + findings
 node perf-e2e.js                      # numbers + report.pdf only
 node perf-deep.js [results-dir]       # cpu.pdf + memory.pdf
 node perf-report.js <results-dir>     # rebuild report from samples.jsonl
-node perf-findings.js <results-dir>   # analysis.pdf + issues.pdf from findings.json
+node perf-findings.js <results-dir>   # analysis.pdf + issues.pdf from findings.json (or findings.auto.json)
 node perf-long.js --platform <p> [--sender]   # long run: 10 min home + 4 x 10 min playback per case
+MUX_ENV_KEY=<key> node perf-long.js --platform <p> --mux  # long run three-way: baseline · Only Mux · Vizbee+sender
 node --test                           # unit tests (report math, memory window)
 npm run check                         # type-check (needs `npm install` here once)
 ```
 
-Flags/env: `--platform vizio|webos|tizen` · `--es6` · `--sender` · `--cases k,k` ·
+Flags/env: `--platform vizio|webos|tizen` · `--es6` · `--sender` · `--mux` · `--cases k,k` · `--disc-idle S` ·
 `PERF_RUNS` · `PERF_HOME_MS` / `PERF_PLAY_MS` · `PERF_PROFILE_MS` · `PERF_OUT_DIR` ·
 `VIZIO_IP` · `WEBOS_DEVICE` · `TIZEN_IP` + `VZB_APP_ID` (Tizen) · `PERF_TV_NAME` +
 `PHONE_SERIAL` (sender) · `PERF_SDK_DIR` (local SDK). `perf-all.js` forwards its flags
@@ -96,8 +97,22 @@ to perf-e2e and perf-deep.
 heap carries across playbacks): warm-up, 10 min home, then 4 playbacks of 10 min, each
 followed by 30s on home (about 55 min per case). Leak signals: per-playback heap slope
 and the memory-by-playback progression. Output:
-`perf-results/vizbee-sdk-long-<date>/<platform>/`. Details and the retained-memory
-(forced-GC) check: `.claude/skills/smarttv-perf/SKILL.md`.
+`perf-results/vizbee-sdk-long-<date>/<platform>/`.
+
+After each playback a 30 s home phase captures **all idle metrics** (CPU, memory
+used/peak/allocated, heap slope, DOM nodes). After the last playback the **sender case**
+disconnects the phone, confirms it, forces a GC and measures a `--disc-idle` (120 s)
+home phase — the **return-to-normal check** (a "Sender disconnect" table + verdict in
+report.pdf: _Released_ within-case, and _Residual_ vs the no-sender level when a
+`nosender` case is present).
+
+Cases: default `nosender` + `without` (cost columns SDK cost, Sender cost); `--sender`
+adds the sender case. **`--mux`** runs the three-way add-on comparison — baseline
+(Without Vizbee & Mux) · Only Mux (mux-embed, no Vizbee) · Vizbee+sender — and the
+report shows **Vizbee cost** (`sender − baseline`) and **Mux cost** (`mux − baseline`),
+each against the shared baseline; set `MUX_ENV_KEY` for a real Mux run. Platform-agnostic
+(vizio/webos/tizen). Any subset via `--cases` (`without,nosender,sender,mux`). Details
+and the retained-memory (forced-GC) check: `.claude/skills/smarttv-perf/SKILL.md`.
 
 ## Outputs (`perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/`)
 
@@ -106,7 +121,10 @@ Folder is meaningful + per-platform (not a raw timestamp). Contents:
 SDK variant, run date — captured into `device.json`), `summary.md`, `results.json`,
 `samples.jsonl` (includes the `vitals` phase), `deep/{cpu,memory}.pdf`, and
 `analysis.pdf` / `issues.pdf` (from a `findings.json` you drop in — template at
-`perf/findings.example.json`).
+`perf/findings.example.json`). The **long run writes `analysis.pdf` + `issues.pdf`
+automatically**: it grades each add-on cost per metric into a draft
+`findings.auto.json` (status `auto-derived - confirm`; thresholds in
+`perf/lib/long-findings.js`); a hand-written `findings.json` overrides it.
 
 `device.json` is auto-captured per platform (Vizio over CDP, webOS via `ares-device -i`,
 Tizen via `sdb capability`); `node perf-report.js <dir>` reads it and derives the run

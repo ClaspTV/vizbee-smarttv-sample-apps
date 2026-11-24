@@ -77,7 +77,8 @@ Must end with `preflight OK`. On failure tell the user what printed:
 | "run perf quick" | `cd perf && node perf-e2e.js` | report only |
 | "why / what is taking CPU or memory" | `cd perf && node perf-deep.js` | cpu.pdf + memory.pdf |
 | "mux perf / cost of Mux" (no Vizbee; without-Mux vs with-Mux) | `cd perf && MUX_ENV_KEY=<key> node perf-mux.js [--platform vizio\|webos\|tizen]` | report (Mux cost) |
-| "long run / long playback / 4 x 10 min / memory leak over playback" | `cd perf && node perf-long.js --platform webos [--sender]` | report (long) |
+| "long run / long playback / 4 x 10 min / memory leak over playback" | `cd perf && node perf-long.js --platform webos [--sender]` | report + analysis + issues (long) |
+| "long run: baseline vs Only Mux vs Vizbee+sender / Vizbee vs Mux cost over a long playback" | `cd perf && MUX_ENV_KEY=<key> node perf-long.js --platform webos --mux` | report (Vizbee cost + Mux cost) + analysis + issues |
 
 Full run: 3 cases × 3 runs × (180s home + 180s playback) ≈ 35–40 min (Vizio);
 ≈ 65 min on Tizen (slower debug-launch and builds).
@@ -96,6 +97,32 @@ a warm-up playback, **10 min home** (`--idle 600`), then **4 playbacks of 10 min
 case. The leak signals are the per-playback **heap slope (MB/min)** over each 10-min
 playback and the **memory-by-playback progression** across the 4 playbacks.
 
+**Cases.** By default the long run measures `nosender` (With Vizbee, no sender)
+and `without` (baseline); `--sender` prepends the sender case. The report's cost
+columns are then **SDK cost** (`nosender − without`) and **Sender cost**
+(`sender − nosender`). **`--mux`** switches to the three-way add-on comparison —
+**Without Vizbee & Mux (baseline) · Only Mux · With Vizbee (sender connected)** —
+and the report shows **Vizbee cost** (`sender − baseline`) and **Mux cost**
+(`mux − baseline`), each add-on measured against the same baseline. The "Only Mux"
+case builds with `MUX_ENABLED=true` and no Vizbee (mux-embed monitoring the player);
+set `MUX_ENV_KEY=<your Mux Data env key>` so it sends data (without it the cost is
+still measured but no data is sent). This is **platform-agnostic** — it builds via
+`platform.mode`, so `--mux` runs as-is on `--platform vizio | webos | tizen`.
+Any case subset also works directly, e.g. `--cases without,mux,sender` or
+`--cases mux` (valid keys: `without | nosender | sender | mux`).
+
+**After each video session** the 30 s home phase (`--after`) captures **all idle
+metrics** (CPU, memory used/peak/allocated, heap slope, DOM nodes), so every session
+is checked on return to home. **After the last playback**, the **sender case**
+disconnects the phone, confirms it is no longer connected (phone cast state), forces a
+GC, and measures a home phase (`--disc-idle`, default 120 s) — the **return-to-normal
+check**: a "Sender disconnect" table in report.pdf shows _with sender_ vs _after
+disconnect_ (**Released** = the within-case drop, the clean signal) and, when a
+`nosender` case is in the run, _Residual vs the no-sender level_ ("back to normal" or
+"still above"). In a `--mux` run there is no `nosender` case, so the within-case
+**Released** column still answers "did CPU/memory come back", but for a clean cross-case
+verdict add `nosender` (plain `--sender`, or `--cases without,nosender,sender,mux`).
+
 **Single session (no reloads) — required.** Phases move home↔player **in-page**
 through the app router (`window.__perf.router`, exposed only when the build is
 compiled with `PERF_HOOKS=true`), so the JS heap carries across playbacks like the
@@ -108,11 +135,12 @@ which **inflates post-reload home CPU** — a measurement artifact, not an SDK c
 and breaks single-session memory). Long VODs (`LONG_VIDEOS` in `lib/cases.js`,
 also in `src/data/videos.ts` so the `#/player/<id>` deep-link resolves): WWDC 2015
 (34 min) primary, WWDC 2017 (103 min) fallback. `--dry-run` ≈ 5 min; `--report <dir>`
-rebuilds report.pdf/summary.md from `results.json`. Default platform is **webos**.
+rebuilds report.pdf/summary.md **and analysis.pdf/issues.pdf** from `results.json`.
+Default platform is **webos**.
 Output: `perf-results/vizbee-sdk-long-<date>/<platform>/`.
 
 Options (env / flags):
-- `--platform vizio|webos|tizen` (default vizio; perf-long defaults to webos)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--cases k,k` (subset, e.g. `sender`)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
+- `--platform vizio|webos|tizen` (default vizio; perf-long defaults to webos)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--mux` (baseline · Only Mux · Vizbee+sender three-way; with `MUX_ENV_KEY`)  ·  `--cases k,k` (subset of `without,nosender,sender,mux`)  ·  `--disc-idle S` (sender return-to-normal home phase after disconnect, default 120)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
 - `PERF_RUNS=N`  ·  `PERF_HOME_MS` / `PERF_PLAY_MS` (ms)  ·  `PERF_PROFILE_MS` (deep-dive profile length)  ·  `PERF_OUT_DIR`
 - Device: `VIZIO_IP=<ip>` · `WEBOS_DEVICE=<name>` · Tizen: `TIZEN_IP=<ip>` + `VZB_APP_ID=<pkg.app>` (e.g. `VizbeeSamp.VizbeeTizenSampleApp`)
 - Sender: `PERF_TV_NAME="<TV name as the phone's picker shows it>"` (required) · `PHONE_SERIAL` (adb serial; default: first attached device)
@@ -128,8 +156,14 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
 - `summary.md`, `results.json` — same numbers
 - `samples.jsonl` — every raw sample incl. the `vitals` phase (rebuild any report: `node perf-report.js <dir>` — it reads `device.json` and derives the run date from sample timestamps)
 - `deep/cpu.pdf`, `deep/memory.pdf` (+ cpu.json, heap.json)
-- `analysis.pdf`, `issues.pdf` — from a `findings.json` you add to the run dir
-  (see `perf/findings.example.json`); then `node perf-findings.js <dir>`
+- `analysis.pdf` (by criticality), `issues.pdf` (by metric) — from a `findings.json`
+  you add to the run dir (see `perf/findings.example.json`); then `node perf-findings.js <dir>`.
+  **The long run writes both automatically**: it derives a data-grounded draft
+  (`findings.auto.json`) by grading each add-on cost (Vizbee cost, Mux cost, ...) per
+  metric against thresholds — honest/observational, status `auto-derived - confirm`,
+  pointing at `perf-deep.js` to localise. A hand-written `findings.json` in the dir
+  overrides the draft (then re-run `node perf-findings.js <dir>`). Thresholds live in
+  `perf/lib/long-findings.js`.
 
 ## 4. Platforms & the sender case
 

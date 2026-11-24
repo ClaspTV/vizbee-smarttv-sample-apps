@@ -174,6 +174,24 @@ export async function stopHeapSampling(cdp) {
 }
 
 /**
+ * Force a garbage collection so a following memory read reflects retained heap,
+ * not yet-uncollected garbage. Used before the "after sender disconnected" read
+ * so "did it return to normal?" measures what is actually held. No-op (false)
+ * where the engine lacks the domain (e.g. webOS 4).
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<boolean>}
+ */
+export async function forceGc(cdp) {
+  try {
+    await cdp.send('HeapProfiler.enable');
+    await cdp.send('HeapProfiler.collectGarbage');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * CPU fraction between two samples: Δ main-thread task seconds / Δ wall seconds.
  * This is a main-thread CPU proxy (TaskDuration), not full-process CPU%.
  * @param {Sample} a

@@ -58,13 +58,14 @@ export const LONG_FALLBACK = ['wwdc-2017'];
  *   label: string,
  *   withVizbee: boolean,
  *   npmPackage: string,
- *   sender: boolean
+ *   sender: boolean,
+ *   mux?: boolean
  * }} Case
  */
 
 /**
  * The elementless npm variant is the one under test.
- * @type {Record<'without' | 'nosender' | 'sender', Case>}
+ * @type {Record<'without' | 'nosender' | 'sender' | 'mux', Case>}
  */
 export const CASES = {
   without: {
@@ -87,5 +88,13 @@ export const CASES = {
     withVizbee: true,
     npmPackage: '@vizbeetv/sdk/vizio-el/es5',
     sender: true,
+  },
+  mux: {
+    key: 'mux',
+    label: 'Only Mux',
+    withVizbee: false,
+    npmPackage: '',
+    sender: false,
+    mux: true,
   },
 };

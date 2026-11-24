@@ -32,7 +32,8 @@ cases so it cancels in the cost differences.
 ```bash
 node perf-e2e.js --check --platform vizio|webos|tizen   # preflight
 node perf-all.js --platform <p> [--sender]               # full run: numbers + deep dive + findings
-node perf-long.js --platform <p> [--sender]              # long run: 10 min home + 4 x 10 min playback per case
+node perf-long.js --platform <p> [--sender]              # long run: 10 min home + 4 x 10 min playback per case; report + analysis + issues
+MUX_ENV_KEY=<key> node perf-long.js --platform <p> --mux # long run, three-way: baseline · Only Mux · Vizbee+sender (Vizbee cost + Mux cost)
 node --test && npm run check                             # unit tests + type-check (npm install here first)
 ```
 

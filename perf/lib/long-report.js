@@ -21,6 +21,7 @@ import { median } from './report.js';
 export const LONG_CASES = /** @type {Array<[string, string]>} */ ([
   ['nosender', 'With Vizbee (no sender)'],
   ['sender', 'With Vizbee (sender)'],
+  ['mux', 'Only Mux'],
   ['without', 'Without Vizbee'],
 ]);
 
@@ -58,18 +59,23 @@ const ROWS = /** @type {Array<[string, string, number, ((c: CaseResult) => numbe
   ['Memory used', 'MB', 1, (c) => (c.home ? c.home.usedEndMB : null), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => (c.home ? c.home.allocMB : null), 'alloc'],
   ['Heap slope', 'MB/min', 2, (c) => (c.home ? c.home.slopeMBMin : null), 'mem'],
+  ['DOM nodes', '', 0, (c) => (c.home ? c.home.nodes : null), 'nodes'],
   ['Playback (median of the playbacks)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => p.play.cpu)), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedEndMB)), 'mem'],
   ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedPeakMB)), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => p.play.allocMB)), 'alloc'],
   ['Heap slope (leak signal)', 'MB/min', 2, (c) => med(c.plays.map((p) => p.play.slopeMBMin)), 'mem'],
+  ['DOM nodes', '', 0, (c) => med(c.plays.map((p) => p.play.nodes)), 'nodes'],
   ['Video start time (VST)', 's', 2, (c) => med(c.plays.map((p) => p.vstSecs)), 'vst'],
   ['Dropped frames', '%', 2, (c) => droppedPctFor(c.plays), 'frames'],
-  ['Home page after each playback (median)', '', 0, null, ''],
+  ['Home page after each playback (median, all idle metrics)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.cpu : null))), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedEndMB : null))), 'mem'],
+  ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedPeakMB : null))), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.allocMB : null))), 'alloc'],
+  ['Heap slope', 'MB/min', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.slopeMBMin : null))), 'mem'],
+  ['DOM nodes', '', 0, (c) => med(c.plays.map((p) => (p.after ? p.after.nodes : null))), 'nodes'],
 ]);
 
 /**
@@ -79,7 +85,7 @@ const ROWS = /** @type {Array<[string, string, number, ((c: CaseResult) => numbe
  * and must be shown as n/a rather than as measured 0.00 / flat values.
  * @param {LongResults} r
  */
-function capability(r) {
+export function capability(r) {
   /** @type {import('./long.js').PhaseResult[]} */
   const ps = [];
   for (const k of Object.keys(r)) {
@@ -105,8 +111,131 @@ function capability(r) {
 }
 
 /** Cases present, in preferred order. @param {LongResults} r */
-function presentCases(r) {
+export function presentCases(r) {
   return LONG_CASES.filter(([k]) => r[k] && (r[k].home || r[k].plays.length));
+}
+
+/**
+ * Cost columns for the present cases. With a baseline (Without) and an Only Mux
+ * case, show each add-on's cost against the baseline (Vizbee cost, Mux cost);
+ * otherwise the usual SDK cost and sender cost.
+ * @param {Array<[string, string]>} cases
+ * @returns {Array<{ label: string, a: string, b: string }>}
+ */
+export function costDefs(cases) {
+  const has = (/** @type {string} */ k) => cases.some(([x]) => x === k);
+  /** @type {Array<{ label: string, a: string, b: string }>} */
+  const defs = [];
+  if (has('mux') && has('without')) {
+    const vz = has('sender') ? 'sender' : has('nosender') ? 'nosender' : null;
+    if (vz) defs.push({ label: 'Vizbee cost', a: vz, b: 'without' });
+    defs.push({ label: 'Mux cost', a: 'mux', b: 'without' });
+    return defs;
+  }
+  if (has('nosender') && has('without')) defs.push({ label: 'SDK cost', a: 'nosender', b: 'without' });
+  if (has('sender') && has('nosender')) defs.push({ label: 'Sender cost', a: 'sender', b: 'nosender' });
+  return defs;
+}
+
+/** Idle metrics shown for the sender-disconnect return-to-normal check. */
+const DISC_METRICS = /** @type {Array<[string, string, number, (p: PhaseResult) => number | null, string]>} */ ([
+  ['CPU average', '%', 2, (p) => p.cpu, 'cpu'],
+  ['Memory used', 'MB', 1, (p) => p.usedEndMB, 'mem'],
+  ['Memory peak', 'MB', 1, (p) => p.usedPeakMB, 'mem'],
+  ['Memory allocated', 'MB', 2, (p) => p.allocMB, 'alloc'],
+  ['Heap slope', 'MB/min', 2, (p) => p.slopeMBMin, 'mem'],
+  ['DOM nodes', '', 0, (p) => p.nodes, 'nodes'],
+]);
+
+/**
+ * The sender case's disconnect check, if it ran: home with the sender connected,
+ * home after disconnect, and the no-sender reference (nosender case if present,
+ * else the Without baseline) to judge "back to normal".
+ * @param {LongResults} r
+ */
+export function disconnectView(r) {
+  const c = r.sender;
+  if (!c || !c.disconnected || !c.home) return null;
+  const refKey = r.nosender && r.nosender.home ? 'nosender' : r.without && r.without.home ? 'without' : null;
+  const refLabel = refKey ? LONG_CASES.find(([k]) => k === refKey)?.[1] ?? refKey : null;
+  return {
+    withSender: c.home,
+    disc: c.disconnected,
+    ref: refKey ? r[refKey].home : null,
+    refKey,
+    refLabel,
+    confirmed: c.disconnectConfirmed !== false,
+  };
+}
+
+/** Table rows for the disconnect check. @param {LongResults} r */
+function disconnectRows(r) {
+  const v = disconnectView(r);
+  if (!v) return null;
+  const { cpuAvailable, memReliable, allocAvailable } = capability(r);
+  const bad = (/** @type {string} */ kind) =>
+    (kind === 'cpu' && !cpuAvailable) || (kind === 'mem' && !memReliable) || (kind === 'alloc' && !allocAvailable);
+  const cell = (/** @type {number | null} */ val, /** @type {number} */ d, /** @type {boolean} */ b) =>
+    b || val === null || val === undefined ? 'n/a' : (+val).toFixed(d);
+  /** @type {string[][]} */
+  const rows = [];
+  for (const [label, unit, d, get, kind] of DISC_METRICS) {
+    const b = bad(kind);
+    const w = get(v.withSender);
+    const di = get(v.disc);
+    const rf = v.ref ? get(v.ref) : null;
+    rows.push([
+      label,
+      unit,
+      cell(w, d, b),
+      cell(di, d, b),
+      b || w === null || di === null ? 'n/a' : delta(di, w, d),
+      v.ref ? cell(rf, d, b) : '-',
+      v.ref && !b && di !== null && rf !== null ? delta(di, rf, d) : 'n/a',
+    ]);
+  }
+  return { rows, refLabel: v.refLabel, confirmed: v.confirmed };
+}
+
+/** One-line verdict: did CPU / memory return to the no-sender level after disconnect?
+ * @param {LongResults} r @returns {string | null} */
+export function disconnectVerdict(r) {
+  const v = disconnectView(r);
+  if (!v) return null;
+  if (!v.confirmed) return 'Sender disconnect NOT confirmed (phone still shows connected); the return-to-normal read may be invalid';
+  const { cpuAvailable, memReliable } = capability(r);
+  if (!cpuAvailable && !memReliable) return 'After sender disconnect: CPU/memory not measurable on this engine';
+  /** @type {string[]} */
+  const released = [];
+  if (cpuAvailable) {
+    const d = v.disc.cpu - v.withSender.cpu;
+    released.push(`CPU ${d >= 0 ? '+' : ''}${d.toFixed(2)}%`);
+  }
+  if (memReliable) {
+    const d = v.disc.usedEndMB - v.withSender.usedEndMB;
+    released.push(`Memory ${d >= 0 ? '+' : ''}${d.toFixed(1)} MB`);
+  }
+  let s = `On disconnect (vs with-sender): ${released.join('; ')}`;
+  if (v.ref) {
+    /** @type {string[]} */
+    const resid = [];
+    if (cpuAvailable) {
+      const d = v.disc.cpu - v.ref.cpu;
+      resid.push(`CPU ${d >= 0 ? '+' : ''}${d.toFixed(2)}% (${Math.abs(d) <= 1 ? 'back to normal' : 'still above'})`);
+    }
+    if (memReliable) {
+      const d = v.disc.usedEndMB - v.ref.usedEndMB;
+      resid.push(`Memory ${d >= 0 ? '+' : ''}${d.toFixed(1)} MB (${Math.abs(d) <= 5 ? 'back to normal' : 'still above'})`);
+    }
+    const caveat =
+      v.refKey === 'without'
+        ? ' [Without Vizbee has no SDK at all, so some residual is the SDK idle cost, not a sender leak; add the no-sender case for a clean check]'
+        : '';
+    s += `. Residual vs ${v.refLabel}: ${resid.join('; ')}${caveat}`;
+  } else {
+    s += '. No no-sender reference in this run to judge "back to normal" (add the nosender case)';
+  }
+  return s;
 }
 
 /**
@@ -115,7 +244,7 @@ function presentCases(r) {
  */
 function longTable(r) {
   const cases = presentCases(r);
-  const has = (/** @type {string} */ k) => cases.some(([x]) => x === k);
+  const costs = costDefs(cases);
   const { cpuAvailable, memReliable, allocAvailable, framesAvailable } = capability(r);
   return ROWS.map(([label, unit, d, get, kind]) => {
     if (!get) return { group: label };
@@ -127,11 +256,10 @@ function longTable(r) {
     /** @type {Record<string, number | null>} */
     const v = {};
     for (const [k] of cases) v[k] = get(r[k]);
-    /** @type {Record<string, string>} */
+    /** @type {any} */
     const cells = { label, unit };
     for (const [k] of cases) cells[k] = na ? 'n/a' : fmtV(v[k], d);
-    cells.sdkCost = na ? 'n/a' : has('nosender') && has('without') ? delta(v.nosender, v.without, d) : 'n/a';
-    cells.senderCost = na ? 'n/a' : has('sender') && has('nosender') ? delta(v.sender, v.nosender, d) : 'n/a';
+    cells.costs = costs.map((c) => (na ? 'n/a' : delta(v[c.a], v[c.b], d)));
     return cells;
   });
 }
@@ -168,18 +296,38 @@ function playRows(r, videos) {
 /** @param {any} meta @param {LongResults} r @param {Record<string, LongVideo>} videos */
 function notesFor(meta, r, videos) {
   const mins = (/** @type {number} */ s) => (s >= 60 ? `${+(s / 60).toFixed(1)} min` : `${s} s`);
+  const present = presentCases(r);
+  const labelOf = (/** @type {string} */ k) => present.find(([x]) => x === k)?.[1] ?? k;
+  const costs = costDefs(present);
+  const costNote = costs.length
+    ? `Costs: ${costs.map((c) => `${c.label} = ${labelOf(c.a)} - ${labelOf(c.b)}`).join('; ')} (differences of the values in the table)`
+    : 'Costs: none shown (a baseline case is needed to compare against)';
   /** @type {string[]} */
   const n = [
-    `Run order: ${(meta.parts ?? []).map((/** @type {string} */ k) => r[k]?.label ?? k).join(' > ') || presentCases(r).map(([, l]) => l).join(' > ')}; one served build per case`,
+    `Run order: ${(meta.parts ?? []).map((/** @type {string} */ k) => r[k]?.label ?? k).join(' > ') || present.map(([, l]) => l).join(' > ')}; one served build per case`,
     `Each case: warm-up playback ${meta.warmupSecs}s, home page ${mins(meta.idleSecs)}, then ${meta.plays} playbacks of ${mins(meta.playSecs)}, each followed by ${meta.afterSecs}s on the home page`,
     'One app session per case: after a single boot, phases move home <-> player through the app router (in-page, no reload), so the JS heap carries across playbacks like the Roku long run. Leak signals: the per-playback heap slope (MB/min) and the memory-by-playback progression below. If the __PERF_HOOKS__ build hook is absent the run falls back to full reloads between phases (noted per case) and only the within-playback slope is meaningful',
-    'Costs: SDK cost = With Vizbee (no sender) - Without Vizbee; Sender cost = With Vizbee (sender) - With Vizbee (no sender) (differences of the values in the table)',
+    costNote,
     'CPU average: main-thread busy fraction - Performance.getMetrics TaskDuration where available, else the Profiler domain (idle-excluded sampling, used on webOS 4). Memory used = average of the last 60 s of each phase (JSHeapUsedSize); peak = max over the phase',
     'Heap slope: least-squares slope of JSHeapUsedSize over the whole phase, in MB/min - a steady positive playback slope is the leak signal (retained heap; n/a where unavailable)',
     'Memory allocated: total bytes allocated during the phase via the HeapProfiler sampling profiler - an allocation / churn signal, not retained heap; on webOS 4 it is the only available memory metric',
     'Video start time (VST): deep-link navigate -> video playing (polled over CDP), wall clock',
     'Dropped frames: HTMLVideoElement.getVideoPlaybackQuality() at the end of each playback; the case value = all its playbacks together (total dropped / total frames)',
   ];
+  if (present.some(([k]) => k === 'mux')) {
+    n.push(
+      'Only Mux: mux-embed (Mux Data) monitoring the player, no Vizbee SDK - the Mux cost column is its overhead against the Without Vizbee & Mux baseline',
+    );
+  }
+  n.push(
+    'Home page after each playback: a full idle capture (all metrics - CPU, memory used/peak/allocated, heap slope, DOM nodes), so each video session is checked on return to the home page',
+  );
+  if (r.sender && r.sender.disconnected) {
+    const ref = r.nosender && r.nosender.home ? 'With Vizbee (no sender)' : 'Without Vizbee';
+    n.push(
+      `Sender disconnect (sender case): after the LAST playback the phone is disconnected and confirmed not connected (phone cast state), a GC is forced, then the home page is measured for ${meta.discIdleSecs ?? '?'}s - the "return to normal" check. "Released" = after-disconnect - with-sender; "Residual vs ref" = after-disconnect - ${ref} home (near 0 = CPU/memory came back to the no-sender level)`,
+    );
+  }
   const cap = capability(r);
   if (cap.memReliable) {
     for (const [k, label] of presentCases(r)) {
@@ -272,16 +420,16 @@ export function writeLongReport(outDir, meta, r, videos) {
       (meta.inProgress ? '   |   IN PROGRESS' : ''),
   ];
 
+  const costs = costDefs(cases);
   /** @type {import('./pdf.js').Column[]} */
   const cols = [['Metric', 150], ['Unit', 46]];
   for (const [, label] of cases) cols.push([label, 96]);
-  cols.push(['SDK cost', 70], ['Sender cost', 70]);
+  for (const c of costs) cols.push([c.label, 78]);
   const cells = (/** @type {any} */ x) => [
     x.label,
     x.unit,
     ...cases.map(([k]) => x[k]),
-    x.sdkCost,
-    x.senderCost,
+    ...x.costs,
   ];
 
   /** @type {import('./pdf.js').Column[]} */
@@ -291,6 +439,13 @@ export function writeLongReport(outDir, meta, r, videos) {
     ['After CPU %', 58], ['After MB', 50],
   ];
 
+  const disc = disconnectRows(r);
+  const discVerdict = disconnectVerdict(r);
+  /** @type {import('./pdf.js').Column[]} */
+  const dcols = disc
+    ? [['Metric', 120], ['Unit', 44], ['With sender', 72], ['After disconnect', 88], ['Released', 60], [disc.refLabel || 'No-sender ref', 104], ['Residual vs ref', 86]]
+    : [];
+
   const doc = pdfDoc();
   doc.title(title);
   head.forEach((s) => doc.line(s));
@@ -299,6 +454,12 @@ export function writeLongReport(outDir, meta, r, videos) {
   doc.gap(10);
   doc.heading('Each playback   (After = the home page right after that playback)');
   doc.table(pcols, rows);
+  if (disc) {
+    doc.gap(10);
+    doc.heading(`Sender disconnect - return to normal   (home idle after the phone disconnected${disc.confirmed ? '' : '; NOT confirmed'})`);
+    doc.table(dcols, disc.rows);
+    if (discVerdict) doc.para('- ' + discVerdict, 160);
+  }
   doc.gap(10);
   doc.heading('Measurement tools');
   doc.table([['Metric', 170], ['Tool / source', 550]], tools);
@@ -323,6 +484,12 @@ export function writeLongReport(outDir, meta, r, videos) {
     md += 'group' in x ? `| **${x.group}** |${' |'.repeat(cols.length - 1)}\n` : mdRow(cells(x));
   }
   md += '\n## Each playback\n\n' + mdRow(pcols.map((c) => c[0])) + mdSep(pcols.length) + rows.map(mdRow).join('');
+  if (disc) {
+    const dhead = dcols.map((c) => c[0]);
+    md += `\n## Sender disconnect - return to normal${disc.confirmed ? '' : ' (NOT confirmed)'}\n\n`;
+    md += mdRow(dhead) + mdSep(dhead.length) + disc.rows.map(mdRow).join('');
+    if (discVerdict) md += `\n- ${discVerdict}\n`;
+  }
   md += '\n## Measurement tools\n\n' + mdRow(['Metric', 'Tool / source']) + mdSep(2) + tools.map(mdRow).join('');
   md += `\n## Notes\n\n${notes.map((s) => `- ${s}`).join('\n')}\n`;
   if (runNotes.length) md += `\n## Run notes\n\n${runNotes.join('\n')}\n`;

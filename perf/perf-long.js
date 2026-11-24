@@ -10,6 +10,7 @@ import { getPlatform } from './lib/platforms.js';
 import { CASES, LONG_VIDEOS, LONG_VIDEO, LONG_FALLBACK } from './lib/cases.js';
 import { runLongCase, longEnough } from './lib/long.js';
 import { writeLongReport } from './lib/long-report.js';
+import { writeLongFindings } from './lib/long-findings.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
 import { findAdb, Phone, phoneSerial } from './lib/phone.js';
 
@@ -21,15 +22,28 @@ import { findAdb, Phone, phoneSerial } from './lib/phone.js';
  *   home page --idle (10 min), then --plays (4) playbacks of --play (10 min),
  *   each followed by --after (30 s) on the home page; one warm-up playback first.
  *
- * Env: VIZIO_IP, WEBOS_DEVICE, VZB_APP_ID, TIZEN_SERIAL, PERF_OUT_DIR, PERF_PORT.
- * Flags: --platform vizio|webos|tizen (default webos), --es6, --sender,
- *        --idle S, --play S, --plays N, --after S, --warmup S, --video <id>,
- *        --fallback a,b, --cases k,k, --dry-run, --report <dir>.
+ * Env: VIZIO_IP, WEBOS_DEVICE, VZB_APP_ID, TIZEN_SERIAL, MUX_ENV_KEY, PERF_OUT_DIR, PERF_PORT.
+ * Flags: --platform vizio|webos|tizen (default webos), --es6, --sender, --mux,
+ *        --idle S, --play S, --plays N, --after S, --warmup S, --disc-idle S,
+ *        --video <id>, --fallback a,b, --cases k,k, --dry-run, --report <dir>.
+ *
+ * After each playback a 30s home phase (--after) captures all idle metrics. After
+ * the last playback, the sender case disconnects the phone, confirms it is no
+ * longer connected, forces a GC and measures a home phase (--disc-idle, default
+ * 120s) - the "return to normal" check: does CPU / memory fall back to the
+ * no-sender level once the sender is gone.
+ *
+ * --mux: the three-way add-on comparison - Without Vizbee & Mux (baseline),
+ *        Only Mux (mux-embed, no Vizbee) and With Vizbee (sender connected);
+ *        the report then shows a Vizbee cost and a Mux cost, each vs the
+ *        baseline. Needs MUX_ENV_KEY for a real Mux run. Platform-agnostic:
+ *        runs as-is on vizio / webos / tizen.
  *
  * --dry-run: home 30 s, 2 playbacks of 60 s, 10 s after each (about 5 min).
  * --report <dir>: rebuild report.pdf / summary.md from that run's results.json.
  */
 const PORT = Number(process.env.PERF_PORT ?? 4190);
+const MUX_ENV_KEY = process.env.MUX_ENV_KEY ?? '';
 
 /** @param {string} flag @returns {string | undefined} */
 function argVal(flag) {
@@ -54,6 +68,8 @@ async function main() {
     const dir = path.resolve(reportDir);
     const { meta, results } = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
     console.log(writeLongReport(dir, meta, results, LONG_VIDEOS));
+    const rf = writeLongFindings(dir, meta, results);
+    console.log(`analysis.pdf + issues.pdf from ${rf.source} (${rf.count} findings)`);
     return;
   }
 
@@ -71,6 +87,7 @@ async function main() {
     fallbacks: argVal('--fallback') ? csv(/** @type {string} */ (argVal('--fallback'))) : LONG_FALLBACK,
     videos: LONG_VIDEOS,
     allowReload: has('--allow-reload'),
+    discIdle: Number(argVal('--disc-idle') ?? (dry ? 15 : 120)),
   };
   if (!LONG_VIDEOS[o.video]) throw new Error(`unknown --video "${o.video}" (${Object.keys(LONG_VIDEOS).join(', ')})`);
   if (!longEnough(LONG_VIDEOS[o.video], o.play)) {
@@ -80,13 +97,20 @@ async function main() {
   const partsArg = argVal('--cases');
   const parts = partsArg
     ? csv(partsArg)
-    : has('--sender')
-      ? ['sender', 'nosender', 'without']
-      : ['nosender', 'without'];
+    : has('--mux')
+      ? ['sender', 'mux', 'without']
+      : has('--sender')
+        ? ['sender', 'nosender', 'without']
+        : ['nosender', 'without'];
+  if (parts.includes('mux') && !MUX_ENV_KEY) {
+    console.warn(
+      '! MUX_ENV_KEY is empty - the Only Mux case still loads mux-embed and its cost is measured, but it sends no data. Set MUX_ENV_KEY=<your Mux Data env key> for a real run.',
+    );
+  }
   /** @type {import('./lib/cases.js').Case[]} */
   const cases = parts.map((k) => {
     const c = CASES[/** @type {'without'} */ (k)];
-    if (!c) throw new Error(`unknown case "${k}" (without | nosender | sender)`);
+    if (!c) throw new Error(`unknown case "${k}" (without | nosender | sender | mux)`);
     return { ...c, npmPackage: c.withVizbee ? pkg : '' };
   });
 
@@ -156,6 +180,7 @@ async function main() {
     plays: o.plays,
     afterSecs: o.after,
     warmupSecs: o.warmup,
+    discIdleSecs: o.discIdle,
     video: o.video,
     parts,
     phone: phone ? 'Android (adb)' : null,
@@ -163,7 +188,10 @@ async function main() {
     inProgress: true,
   };
 
-  const eachMin = Math.round((o.warmup + o.idle + o.plays * (o.play + o.after) + 120) / 60);
+  const senderPresent = parts.includes('sender');
+  const eachMin = Math.round(
+    (o.warmup + o.idle + o.plays * (o.play + o.after) + (senderPresent ? o.discIdle : 0) + 120) / 60,
+  );
   console.log(`output ${outRoot}`);
   console.log(
     `plan: ${parts.join(' > ')}, one build each; home ${o.idle}s, ${o.plays} x playback ${o.play}s (+${o.after}s home after each); video ${LONG_VIDEOS[o.video].title}; about ${eachMin * parts.length} min`,
@@ -186,7 +214,7 @@ async function main() {
     console.log(`\n=== ${c.key} (${c.label}) ===`);
     const outDir = `dist/_perf-long-${platform.key}-${c.key}`;
     console.log('building ...');
-    buildVariant({ withVizbee: c.withVizbee, npmPackage: c.npmPackage, mode: platform.mode, outDir, perfHooks: true });
+    buildVariant({ withVizbee: c.withVizbee, npmPackage: c.npmPackage, mode: platform.mode, outDir, perfHooks: true, mux: !!c.mux, muxEnvKey: MUX_ENV_KEY });
     const served = await serve(outDir, PORT);
     console.log(`serving ${served.url}`);
     if (phone && !c.sender) {
@@ -236,6 +264,12 @@ async function main() {
   meta.inProgress = false;
   fs.rmSync(path.join(outRoot, 'results.partial.json'), { force: true });
   console.log('\n' + writeLongReport(outRoot, meta, results, LONG_VIDEOS));
+  try {
+    const rf = writeLongFindings(outRoot, meta, results);
+    console.log(`analysis.pdf + issues.pdf from ${rf.source} (${rf.count} findings)`);
+  } catch (e) {
+    console.log(`  (findings update failed: ${/** @type {Error} */ (e).message})`);
+  }
   console.log(`\nresults: ${outRoot}`);
 }
 

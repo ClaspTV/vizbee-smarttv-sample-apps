@@ -22,10 +22,16 @@ function main() {
     console.error('usage: node perf-findings.js <dir> [--platform Vizio]');
     process.exit(1);
   }
-  const fjson = path.join(dir, 'findings.json');
+  let fjson = path.join(dir, 'findings.json');
   if (!fs.existsSync(fjson)) {
-    console.error(`no findings.json in ${dir}`);
-    process.exit(1);
+    const auto = path.join(dir, 'findings.auto.json');
+    if (fs.existsSync(auto)) {
+      fjson = auto;
+      console.log('no findings.json; using the auto-derived findings.auto.json (long run)');
+    } else {
+      console.error(`no findings.json (or findings.auto.json) in ${dir}`);
+      process.exit(1);
+    }
   }
   const platform = argVal('--platform') ?? 'Vizio';
   /** @type {import('./lib/findings.js').Finding[]} */
