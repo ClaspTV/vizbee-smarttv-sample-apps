@@ -12,7 +12,7 @@ Runs on bare Node 22 — no install needed except for `npm run check` (type-chec
 | Metrics | CPU (main-thread, CDP TaskDuration) · memory (JS heap, last-60s avg) |
 | Web vitals | FCP/LCP/TTFB captured in-page over CDP (render proxy on platforms with no native paint/LCP, e.g. Vizio) |
 | Cases | without Vizbee · with Vizbee no sender · with Vizbee sender connected |
-| Phases | home/idle 180s · playback 180s (hash deep-link into `/player/<id>`) |
+| Phases | home/idle 180s · playback 180s (fresh deep-link load of `#/player/<id>`) |
 | Runs | 3 per case, videos rotated in a fixed order (so run i is paired across cases) |
 | Costs | SDK = no-sender − without; Sender = sender − no-sender; median of paired per-video diffs |
 
@@ -25,17 +25,29 @@ The app is built three ways by env-driven Vite defines — the repo is never pat
   a clean *runtime* baseline. Grafana + HomeSSO stay on in every case, so they cancel.
 - **with Vizbee**: `VIZBEE_SDK_NPM_PACKAGE=@vizbeetv/sdk/<plat>-el/<es5|es6>` → the
   elementless SDK is bundled and loaded.
-- **sender**: same build as no-sender; differs only by a phone being connected.
+- **sender**: same build as no-sender; differs only by a phone being connected
+  (Android Vizbee demo app driven over adb, `lib/phone.js`).
+- **Tizen** (Chromium 63 on 2019 TVs): every case is built with
+  `perf/vite.legacy.config.ts` (chrome63, one bundle, no plugin-legacy) plus inline
+  polyfills, so the same build boots on the old engine in every case.
+- **Local SDK**: `PERF_SDK_DIR=<SDK repo>/dist/npm` swaps the npm package under test
+  for a local SDK build (no `package.json` change).
 
-Each build is served locally (`vite preview`) and the TV is pointed at the LAN URL
-over CDP — no deploy per run.
+Each build is served locally (`vite preview --strictPort`, stopped as a process
+group so no stale server keeps serving an old build) and the TV is pointed at the LAN
+URL over CDP — no deploy per run.
 
 ## How it drives the app
 
 - `[VZBPERF] app launched` (after first render) and `[VZBPERF] video playing` (on the
   `<video>` `playing` event) are logged by the app and read over CDP as phase markers.
-- Playback starts in-session by setting `location.hash = '#/player/<id>'` (the router
-  listens for `hashchange`) — deterministic, no casting, no reload.
+- Playback starts as a fresh deep-link load of `<url>#/player/<id>` (the router reads
+  the launch hash on boot), so every run starts from a clean boot — deterministic, no
+  casting. Playback start = the `video playing` marker **or** the `<video>` clock
+  passing 1s, whichever is first (2019 Tizen never fires `playing` with the SDK loaded).
+- Sampling starts at the same point in every case (launch / playback start). In the
+  sender case the phone connects inside the measured window, so its connect is part of
+  the sender cost. The demo app is force-stopped during the other cases.
 
 ## Capture
 
@@ -44,8 +56,8 @@ One transport (CDP) for every platform; only the attach differs:
 | Platform | Attach | Status |
 |----------|--------|--------|
 | Vizio | `http://<ip>:9555/json` | validated |
-| LG webOS | `ares-inspect` → local inspector port | adapter present, needs on-device validation |
-| Samsung Tizen | `sdb debug` + `sdb forward` | adapter present, needs on-device validation |
+| LG webOS | `ares-inspect` → local inspector port | validated |
+| Samsung Tizen | `sdb connect` → kill → `sdb shell 0 debug <appId>` → `sdb forward` | validated (2019 UN49RU8000, Tizen 5.0) |
 
 | Metric | CDP |
 |--------|-----|
@@ -67,12 +79,25 @@ node perf-e2e.js                      # numbers + report.pdf only
 node perf-deep.js [results-dir]       # cpu.pdf + memory.pdf
 node perf-report.js <results-dir>     # rebuild report from samples.jsonl
 node perf-findings.js <results-dir>   # analysis.pdf + issues.pdf from findings.json
+node perf-long.js --platform <p> [--sender]   # long run: 10 min home + 4 x 10 min playback per case
 node --test                           # unit tests (report math, memory window)
 npm run check                         # type-check (needs `npm install` here once)
 ```
 
-Flags/env: `--platform vizio|webos|tizen` · `--es6` · `--sender` · `PERF_RUNS` ·
-`PERF_HOME_MS` / `PERF_PLAY_MS` · `PERF_PROFILE_MS` · `VIZIO_IP` · `PERF_OUT_DIR`.
+Flags/env: `--platform vizio|webos|tizen` · `--es6` · `--sender` · `--cases k,k` ·
+`PERF_RUNS` · `PERF_HOME_MS` / `PERF_PLAY_MS` · `PERF_PROFILE_MS` · `PERF_OUT_DIR` ·
+`VIZIO_IP` · `WEBOS_DEVICE` · `TIZEN_IP` + `VZB_APP_ID` (Tizen) · `PERF_TV_NAME` +
+`PHONE_SERIAL` (sender) · `PERF_SDK_DIR` (local SDK). `perf-all.js` forwards its flags
+to perf-e2e and perf-deep.
+
+## Long run
+
+`perf-long.js`: per case, one build in **one app session** (in-page router nav, so the
+heap carries across playbacks): warm-up, 10 min home, then 4 playbacks of 10 min, each
+followed by 30s on home (about 55 min per case). Leak signals: per-playback heap slope
+and the memory-by-playback progression. Output:
+`perf-results/vizbee-sdk-long-<date>/<platform>/`. Details and the retained-memory
+(forced-GC) check: `.claude/skills/smarttv-perf/SKILL.md`.
 
 ## Outputs (`perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/`)
 
@@ -91,7 +116,9 @@ date from the sample timestamps when rebuilding a report.
 
 `cdp.js` (transport) · `metrics.js` (sample, cpuPercent, lastWindowAvg) ·
 `device/{vizio,webos,tizen,index}.js` (attach) · `build.js` (env-driven variant +
-local serve) · `platforms.js` · `cases.js` · `preflight.js` · `runner.js` (phases) ·
+local serve) · `legacy-polyfills.js` + `../vite.legacy.config.ts` (Tizen 5.0 build) ·
+`platforms.js` · `cases.js` · `preflight.js` · `runner.js` (phases) ·
+`long.js` + `long-report.js` (long run) · `deviceinfo.js` ·
 `report.js` (math + jsonl loader) · `pdf.js` (zero-dep writer) · `pdf-report.js` ·
 `profile.js` (Profiler/HeapProfiler) · `pdf-deep.js` · `findings.js` · `phone.js` (sender).
 

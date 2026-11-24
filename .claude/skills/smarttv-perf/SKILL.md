@@ -13,9 +13,9 @@ platforms; only the attach differs. Guide: `docs/performance-e2e.md`.
 |---|---|
 | Metrics | CPU (main-thread), memory, web vitals (FCP/LCP/TTFB captured in-page over CDP; render proxy where no native paint/LCP). |
 | Cases | Without Vizbee · With Vizbee (no sender) · With Vizbee (sender connected) |
-| Phases | Home/idle 180s · Playback 180s (hash deep-link, no casting) |
+| Phases | Home/idle 180s · Playback 180s (fresh deep-link load of `#/player/<id>`, no casting) |
 | Variant | Elementless npm SDK (`@vizbeetv/sdk/<plat>-el`) |
-| Platforms | Vizio (validated) · webOS · Tizen (adapters present, need on-device validation) |
+| Platforms | Vizio · LG webOS · Samsung Tizen (all validated; Tizen on a 2019 UN49RU8000, Tizen 5.0 / Chromium 63) |
 
 **Never ask the user anything once asked to run, and do not stop the run.** Dead
 streams are dropped in preflight; a run uses whatever streams respond.
@@ -65,7 +65,9 @@ Must end with `preflight OK`. On failure tell the user what printed:
 | Vizio UNREACHABLE | Open the app on the TV (debug port :9555 is only up while a page runs) |
 | streams DOWN | transient; the run drops them and uses the rest |
 | (webOS) ares-inspect not found | `npm i -g @webosose/ares-cli`, set the device |
-| (Tizen) sdb not found | install Tizen Studio CLI; connect the TV |
+| (Tizen) sdb not found | install Tizen Studio CLI (`~/tizen-studio/tools`); connect the TV |
+| (Tizen) UNREACHABLE | TV IP changed (DHCP): scan the LAN for port 26101 and set `TIZEN_IP`; app not installed / wrong `VZB_APP_ID`; app signed with an expired certificate (re-sign with a valid profile and reinstall) |
+| port 4190 in use | a stale `vite preview` from an interrupted run: `pkill -f "vite preview --outDir dist/_perf"` (serving uses `--strictPort`, so it fails instead of silently serving an old build) |
 
 ## 2. Run (background)
 
@@ -75,14 +77,24 @@ Must end with `preflight OK`. On failure tell the user what printed:
 | "run perf quick" | `cd perf && node perf-e2e.js` | report only |
 | "why / what is taking CPU or memory" | `cd perf && node perf-deep.js` | cpu.pdf + memory.pdf |
 | "mux perf / cost of Mux" (no Vizbee; without-Mux vs with-Mux) | `cd perf && MUX_ENV_KEY=<key> node perf-mux.js [--platform vizio\|webos\|tizen]` | report (Mux cost) |
-| "long run / long playback / 20 min / 2 x 20 min / memory leak over playback" | `cd perf && node perf-long.js --platform webos [--sender]` | report (long) |
+| "long run / long playback / 4 x 10 min / memory leak over playback" | `cd perf && node perf-long.js --platform webos [--sender]` | report (long) |
 
-Full run: 3 cases × 3 runs × (180s home + 180s playback) ≈ 35–40 min.
+Full run: 3 cases × 3 runs × (180s home + 180s playback) ≈ 35–40 min (Vizio);
+≈ 65 min on Tizen (slower debug-launch and builds).
+
+Standard-run phase timing is identical across cases: sampling starts at the
+`[VZBPERF] app launched` marker (home) and at playback start (play). In the sender
+case the phone connects **inside** that window (started right after the first sample),
+so the connect is part of the sender cost and no case skips the launch work. Playback
+start = the `[VZBPERF] video playing` marker **or** the `<video>` clock passing 1s,
+whichever comes first (some engines never fire `playing` with the SDK loaded, e.g.
+2019 Tizen); 90s timeout.
 
 Long run (`perf-long.js`): one built+served variant per case, then — per case —
-a warm-up playback, **10 min home** (`--idle 600`), then **2 playbacks of 20 min**
-(`--play 1200 --plays 2`), each followed by 30s home (`--after 30`). The leak
-signal is the per-playback **heap slope (MB/min)** over the whole 20-min playback.
+a warm-up playback, **10 min home** (`--idle 600`), then **4 playbacks of 10 min**
+(`--play 600 --plays 4`), each followed by 30s home (`--after 30`), about 55 min per
+case. The leak signals are the per-playback **heap slope (MB/min)** over each 10-min
+playback and the **memory-by-playback progression** across the 4 playbacks.
 
 **Single session (no reloads) — required.** Phases move home↔player **in-page**
 through the app router (`window.__perf.router`, exposed only when the build is
@@ -100,9 +112,13 @@ rebuilds report.pdf/summary.md from `results.json`. Default platform is **webos*
 Output: `perf-results/vizbee-sdk-long-<date>/<platform>/`.
 
 Options (env / flags):
-- `--platform vizio|webos|tizen` (default vizio)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
-- `PERF_RUNS=N`  ·  `PERF_HOME_MS` / `PERF_PLAY_MS` (ms)  ·  `VIZIO_IP=<ip>`
-- `PERF_PROFILE_MS` (deep-dive profile length)
+- `--platform vizio|webos|tizen` (default vizio; perf-long defaults to webos)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--cases k,k` (subset, e.g. `sender`)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
+- `PERF_RUNS=N`  ·  `PERF_HOME_MS` / `PERF_PLAY_MS` (ms)  ·  `PERF_PROFILE_MS` (deep-dive profile length)  ·  `PERF_OUT_DIR`
+- Device: `VIZIO_IP=<ip>` · `WEBOS_DEVICE=<name>` · Tizen: `TIZEN_IP=<ip>` + `VZB_APP_ID=<pkg.app>` (e.g. `VizbeeSamp.VizbeeTizenSampleApp`)
+- Sender: `PERF_TV_NAME="<TV name as the phone's picker shows it>"` (required) · `PHONE_SERIAL` (adb serial; default: first attached device)
+- `PERF_SDK_DIR=<SDK repo>/dist/npm` — test a local SDK build (see §5)
+- `perf-all.js` forwards its flags (`--platform`, `--sender`, `--es6`, `--cases`) to perf-e2e and perf-deep.
+- **Export** env vars when chaining commands (`export X=…; node a.js && node b.js`); a `X=… node a.js && node b.js` prefix only reaches the first command.
 
 ## 3. Outputs
 
@@ -117,14 +133,28 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
 
 ## 4. Platforms & the sender case
 
-- **Vizio** is validated end-to-end (attach on `:9555`).
-- **webOS / Tizen** use the same capture; their device adapters
-  (`perf/lib/device/webos.js`, `tizen.js`) follow ares-cli / sdb mechanics but are
-  marked UNTESTED — validate the inspector attach on a real TV, then set
-  `validated:true` in `perf/lib/platforms.js`.
-- **Sender case** (`--sender`) needs an Android phone with the Vizbee demo app
-  (`tv.vizbee.demo`) over adb (`perf/lib/phone.js`); the connect step is a stub to
-  fill in on-device.
+- **Vizio**: attach on `:9555`.
+- **LG webOS**: `ares-inspect` (see per-engine capture above for webOS 4).
+- **Samsung Tizen** (validated on a 2019 UN49RU8000, Tizen 5.0 / Chromium 63):
+  - Attach: `sdb connect $TIZEN_IP` → `sdb shell 0 kill <pkgId>` (a debug-launch hangs
+    if the app is already running; `was_kill` is refused on retail images) →
+    `sdb shell 0 debug <appId>` (no trailing timeout arg on Tizen 5.0) → `sdb forward`
+    → `/json` (retried ~30s: the port is reported before the inspector listens).
+    `perf/lib/device/tizen.js` does all of this.
+  - The installed app must be debuggable and signed with a **valid** certificate
+    profile (an expired one makes `sdb debug` return `closed`).
+  - Build: every Tizen case is built with `perf/vite.legacy.config.ts` (chrome63
+    target, one bundle, no `@vitejs/plugin-legacy`, `import.meta` rewritten) plus inline
+    ES2019 polyfills (`perf/lib/legacy-polyfills.js`). The app's own plugin-legacy split
+    half-runs the modern bundle on Chromium 63 and the app never finishes booting. Same
+    build for every case, so it cancels in the costs — but absolute Tizen numbers will
+    shift if this build setup changes.
+- **Sender case** (`--sender` / `--cases sender`) drives an Android phone with the
+  Vizbee demo app (`tv.vizbee.demo`) over adb (`perf/lib/phone.js`: UI Automator taps
+  the cast icon and the TV named `PERF_TV_NAME`, confirms via logcat). The phone is
+  disconnected before each app reload and reconnected after it, and the demo app is
+  **force-stopped during the no-sender / without cases** so it cannot auto-reconnect
+  and contaminate them. The long run does the same and keeps the phone awake.
 - **The phone's Vizbee App ID must match the TV app's**, or the phone cannot pair
   with the TV (they only find each other on the same appId). The TV app's id is
   `vizbeeAppId` in `src/services/config/ConfigService.ts` (default `vzb2057833111`,
@@ -138,6 +168,32 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
   then relaunch the demo app. Always confirm `phone.appId()` equals the TV's
   `vizbeeAppId` before a sender run.
 
+## 5. Testing a local SDK build
+
+To measure an SDK branch before it is published, build it in the SDK repo and point
+the harness at it — `package.json` / `node_modules` are not touched:
+
+```
+cd <Vizbee_Generic_App> && npm run build:sdk:npm:tizen:el:es5   # or lgwebos / vizio / xbox
+cd <this repo>/perf && PERF_SDK_DIR=<Vizbee_Generic_App>/dist/npm node perf-long.js --platform tizen ...
+```
+
+Only the package under test (`VIZBEE_SDK_NPM_PACKAGE`) is aliased to
+`$PERF_SDK_DIR/<plat>-el/<es5|es6>/index.js` (Tizen builds; via
+`perf/vite.legacy.config.ts`). Local builds report the SDK repo's `package.json`
+version, not the release-stamped one — label the report with the branch/commit.
+Write each SDK's run to its own `PERF_OUT_DIR` so runs do not overwrite each other.
+
+## 6. Retained-memory check (leak triage)
+
+`JSHeapUsedSize` includes garbage not yet collected, so a rising heap is not proof of
+a leak. After a long run the app is still running on the TV: re-attach **without
+relaunching** (forward the same inspector port), call `HeapProfiler.collectGarbage`,
+then read `Performance.getMetrics` (retained heap, `JSEventListeners`) and count live
+objects by type with `Runtime.queryObjects` (e.g. `XMLHttpRequest.prototype`,
+`PerformanceObserver.prototype`). Capture the inspector port during the run
+(`sdb forward --list`).
+
 ## Issues to look for (JS equivalents of the Roku findings)
 
 - Polling the `<video>` element / player on a timer instead of listening to its
@@ -146,6 +202,14 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
 - Logger building strings even when logging is off (CPU).
 - Home-page CPU rising with a sender connected — monitor/state running every loop
   instead of on change.
+- Retained XHRs paired 1:1 with `PerformanceObserver`s growing with a sender
+  connected: XHR-tracing instrumentation (Grafana Faro / OpenTelemetry, New Relic,
+  ...) plus PubNub aborting the finished subscribe XHR inside its own
+  `readystatechange(4)` callback (load/loadend never fire, so the tracer never
+  cleans up). Fixed in the SDK (`src/vtvutils/PubNubXhr.js` skips aborting finished
+  requests; used by Tizen / LG / Xbox / Vizio / Chromecast v2 builds) and in this app
+  (Faro `ignoreUrls` for PubNub in `src/services/grafana/GrafanaService.ts`).
+  Chromecast CAF and the hosted combined builds still use superagent.
 
 Record each as a finding in `findings.json`: id, title (with the number),
 criticality (HIGH/MEDIUM/LOW/INFO), owner, status, per-run values, cause (file:line),

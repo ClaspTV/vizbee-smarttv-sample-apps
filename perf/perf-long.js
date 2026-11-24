@@ -15,10 +15,10 @@ import { findAdb, Phone, phoneSerial } from './lib/phone.js';
 
 /**
  * Long playback run: one served build per case, a long home page, then several
- * long (> 20 min) playbacks, in the same build. Mirrors the Roku long run
+ * 10-min playbacks, in the same build. Mirrors the Roku long run
  * (scripts/perf-long.js): the defaults ARE the measurement.
  *
- *   home page --idle (10 min), then --plays (2) playbacks of --play (20 min),
+ *   home page --idle (10 min), then --plays (4) playbacks of --play (10 min),
  *   each followed by --after (30 s) on the home page; one warm-up playback first.
  *
  * Env: VIZIO_IP, WEBOS_DEVICE, VZB_APP_ID, TIZEN_SERIAL, PERF_OUT_DIR, PERF_PORT.
@@ -63,8 +63,8 @@ async function main() {
 
   const o = {
     idle: Number(argVal('--idle') ?? (dry ? 30 : 600)),
-    play: Number(argVal('--play') ?? (dry ? 60 : 1200)),
-    plays: Number(argVal('--plays') ?? 2),
+    play: Number(argVal('--play') ?? (dry ? 60 : 600)),
+    plays: Number(argVal('--plays') ?? (dry ? 2 : 4)),
     after: Number(argVal('--after') ?? (dry ? 10 : 30)),
     warmup: Number(argVal('--warmup') ?? (dry ? 10 : 20)),
     video: argVal('--video') ?? LONG_VIDEO,
