@@ -23,6 +23,9 @@ export class GrafanaService {
         webVitalsInstrumentation: {
           reportAllChanges: true,
         },
+        // Don't trace the Vizbee SDK's PubNub traffic: it polls on every sender message,
+        // and each traced request holds an XHR + PerformanceObserver until it ends.
+        ignoreUrls: [/pndsn\.com/, /pubnub\.(com|net)/],
         instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
       });
       if (this.pendingRenderMs !== null) {
