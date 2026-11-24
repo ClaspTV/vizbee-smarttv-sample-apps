@@ -63,6 +63,117 @@ export async function sample(cdp) {
 }
 
 /**
+ * Main-thread busy % from a CPU profile (idle-excluded hits / total hits).
+ * Handles both the legacy `head` tree (Chromium 53 / webOS 4) and the flat
+ * `nodes`+`samples` format (newer engines).
+ * @param {any} p
+ * @returns {number | null}
+ */
+function busyFromProfile(p) {
+  if (!p) return null;
+  if (p.head) {
+    /** @param {any} node @param {string} [name] @returns {number} */
+    const hits = (node, name) => {
+      let h = !name || node.functionName === name ? node.hitCount || 0 : 0;
+      for (const c of node.children || []) h += hits(c, name);
+      return h;
+    };
+    const total = hits(p.head);
+    if (!total) return null;
+    return (100 * (total - hits(p.head, '(idle)'))) / total;
+  }
+  if (p.nodes && p.samples) {
+    /** @type {Map<number, any>} */
+    const byId = new Map(p.nodes.map((/** @type {any} */ n) => [n.id, n]));
+    let total = 0;
+    let idle = 0;
+    for (const s of p.samples) {
+      total++;
+      const n = byId.get(s);
+      const fn = n && (n.callFrame ? n.callFrame.functionName : n.functionName);
+      if (fn === '(idle)') idle++;
+    }
+    return total ? (100 * (total - idle)) / total : null;
+  }
+  return null;
+}
+
+/**
+ * Begin a CPU profile (the only main-thread-CPU source on webOS 4, where the
+ * Performance domain is absent). Returns true if the Profiler domain is usable.
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<boolean>}
+ */
+export async function startCpuProfile(cdp) {
+  try {
+    await cdp.send('Profiler.enable');
+    try {
+      await cdp.send('Profiler.setSamplingInterval', { interval: 1000 });
+    } catch {
+      /* default interval */
+    }
+    await cdp.send('Profiler.start');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stop the CPU profile and return main-thread busy % over the window.
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<number | null>}
+ */
+export async function stopCpuProfile(cdp) {
+  try {
+    const r = await cdp.send('Profiler.stop');
+    return busyFromProfile(r && r.profile);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Begin allocation sampling (HeapProfiler). On webOS 4 the retained-heap sources
+ * (performance.memory, Runtime.getHeapUsage) are stubbed/absent and full heap
+ * snapshots hang, but the sampling allocation profiler works and reports real
+ * bytes allocated over the window - a memory-churn signal.
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<boolean>}
+ */
+export async function startHeapSampling(cdp) {
+  try {
+    await cdp.send('HeapProfiler.enable');
+    await cdp.send('HeapProfiler.startSampling', { samplingInterval: 16384 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stop allocation sampling; return total bytes allocated over the window.
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<number | null>}
+ */
+export async function stopHeapSampling(cdp) {
+  try {
+    const r = await cdp.send('HeapProfiler.stopSampling');
+    const p = r && r.profile;
+    if (!p || !p.head) return null;
+    /** @param {any} n @returns {number} */
+    const sum = (n) => {
+      let s = n.selfSize || 0;
+      for (const c of n.children || []) s += sum(c);
+      return s;
+    };
+    return sum(p.head);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * CPU fraction between two samples: Δ main-thread task seconds / Δ wall seconds.
  * This is a main-thread CPU proxy (TaskDuration), not full-process CPU%.
  * @param {Sample} a
@@ -95,6 +206,31 @@ export function lastWindowAvg(samples, get, windowMs) {
 /**
  * @typedef {{ fcp: number | null, lcp: number | null, ttfb: number | null, proxy: boolean }} WebVitals
  */
+
+/**
+ * Video playback quality for the current <video> (cumulative over the element's
+ * life = this playback). Uses getVideoPlaybackQuality (Chrome 42+, so webOS 4
+ * works), falling back to the legacy webkitDroppedFrameCount counters.
+ * @param {import('./cdp.js').Cdp} cdp
+ * @returns {Promise<{ droppedFrames: number | null, totalFrames: number | null, droppedPct: number | null }>}
+ */
+export async function captureVideoQuality(cdp) {
+  const expr = `(function(){
+    var v=document.querySelector('video'); if(!v) return null;
+    if (v.getVideoPlaybackQuality){ var q=v.getVideoPlaybackQuality(); return JSON.stringify({d:q.droppedVideoFrames,t:q.totalVideoFrames}); }
+    if (typeof v.webkitDroppedFrameCount==='number') return JSON.stringify({d:v.webkitDroppedFrameCount,t:(v.webkitDecodedFrameCount||0)+(v.webkitDroppedFrameCount||0)});
+    return null;
+  })()`;
+  try {
+    const raw = await cdp.evaluate(expr);
+    if (!raw) return { droppedFrames: null, totalFrames: null, droppedPct: null };
+    const o = JSON.parse(raw);
+    const droppedPct = o.t > 0 ? (100 * o.d) / o.t : null;
+    return { droppedFrames: o.d, totalFrames: o.t, droppedPct };
+  } catch {
+    return { droppedFrames: null, totalFrames: null, droppedPct: null };
+  }
+}
 
 /**
  * Read FCP / LCP / TTFB from the page's performance entries (ms since nav start).

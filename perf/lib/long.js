@@ -1,7 +1,17 @@
 // @ts-check
 'use strict';
 
-import { cpuPercent, lastWindowAvg, sampleFor, captureWebVitals } from './metrics.js';
+import {
+  cpuPercent,
+  lastWindowAvg,
+  sampleFor,
+  captureWebVitals,
+  captureVideoQuality,
+  startCpuProfile,
+  stopCpuProfile,
+  startHeapSampling,
+  stopHeapSampling,
+} from './metrics.js';
 import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
 
 /**
@@ -26,6 +36,7 @@ import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
  *   usedEndMB: number,
  *   usedPeakMB: number,
  *   slopeMBMin: number,
+ *   allocMB: number,
  *   nodes: number,
  *   listeners: number,
  *   secs: number
@@ -36,6 +47,9 @@ import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
  *   video: string,
  *   play: PhaseResult,
  *   vstSecs: number | null,
+ *   droppedFrames: number | null,
+ *   totalFrames: number | null,
+ *   droppedPct: number | null,
  *   after: PhaseResult | null,
  *   notes: string[]
  * }} PlayResult
@@ -111,6 +125,7 @@ export function phaseStats(samples) {
     usedEndMB,
     usedPeakMB,
     slopeMBMin,
+    allocMB: 0,
     nodes: last ? last.nodes : 0,
     listeners: last ? last.listeners : 0,
     secs,
@@ -147,11 +162,27 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
   };
   const cdp = await dev.attach();
   await cdp.send('Runtime.enable');
+  let hasPerf = true;
   try {
     await cdp.send('Performance.enable');
   } catch {
-    /* Performance domain absent (webOS 4 / Chromium 53) - sample() falls back */
+    hasPerf = false;
   }
+
+  /** Capture one phase: memory/nodes via sampleFor; CPU via the Performance
+   * domain where present, else the Profiler domain (webOS 4). @param {number} ms
+   * @param {(s: Sample) => void} onSample @returns {Promise<PhaseResult>} */
+  const capturePhase = async (ms, onSample) => {
+    const profiling = hasPerf ? false : await startCpuProfile(cdp);
+    const heapSampling = await startHeapSampling(cdp);
+    const samples = await sampleFor(cdp, ms, INTERVAL_MS, onSample);
+    const cpuPct = profiling ? await stopCpuProfile(cdp) : null;
+    const allocBytes = heapSampling ? await stopHeapSampling(cdp) : null;
+    const stats = phaseStats(samples);
+    if (cpuPct !== null && cpuPct !== undefined) stats.cpu = cpuPct;
+    if (allocBytes !== null && allocBytes !== undefined) stats.allocMB = allocBytes / 1e6;
+    return stats;
+  };
 
   /** @type {Set<string>} */
   const dead = new Set();
@@ -248,10 +279,9 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
     log(`${case_.label}: warm-up playback ${o.warmup}s done`);
   }
 
-  const home = await sampleFor(cdp, o.idle * 1000, INTERVAL_MS, (s) =>
+  r.home = await capturePhase(o.idle * 1000, (s) =>
     writeSample({ case: case_.key, phase: 'home', video, ...s }),
   );
-  r.home = phaseStats(home);
   log(`  RESULT ${case_.label}, home page ${o.idle}s: ${phaseLine(r.home)}`);
   onProgress(r);
 
@@ -263,22 +293,32 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
     const vitals = await captureWebVitals(cdp);
     writeSample({ case: case_.key, phase: 'vitals', play: n, video, ...vitals });
 
-    const pb = await sampleFor(cdp, o.play * 1000, INTERVAL_MS, (s) =>
+    const playStats = await capturePhase(o.play * 1000, (s) =>
       writeSample({ case: case_.key, phase: `play-${n}`, video, ...s }),
     );
+    const vq = await captureVideoQuality(cdp);
 
     /** @type {PhaseResult | null} */
     let after = null;
     await gotoHome();
     if (o.after > 0) {
-      const a = await sampleFor(cdp, o.after * 1000, INTERVAL_MS, (s) =>
+      after = await capturePhase(o.after * 1000, (s) =>
         writeSample({ case: case_.key, phase: `after-${n}`, video, ...s }),
       );
-      after = phaseStats(a);
     }
 
     /** @type {PlayResult} */
-    const pr = { n, video, play: phaseStats(pb), vstSecs, after, notes };
+    const pr = {
+      n,
+      video,
+      play: playStats,
+      vstSecs,
+      droppedFrames: vq.droppedFrames,
+      totalFrames: vq.totalFrames,
+      droppedPct: vq.droppedPct,
+      after,
+      notes,
+    };
     r.plays.push(pr);
     log(`  RESULT ${case_.label}, playback ${n}/${o.plays}: ${playLine(pr, o.videos)}`);
     onProgress(r);
@@ -306,7 +346,7 @@ export function phaseLine(p) {
 export function playLine(p, videos) {
   const title = videos[p.video] ? videos[p.video].title : p.video;
   return (
-    `${title}, ${Math.round(p.play.secs)}s: ${phaseLine(p.play)} vst ${f(p.vstSecs, 2)}s` +
+    `${title}, ${Math.round(p.play.secs)}s: ${phaseLine(p.play)} vst ${f(p.vstSecs, 2)}s dropped ${f(p.droppedPct, 2)}% (${p.droppedFrames ?? 'n/a'}/${p.totalFrames ?? 'n/a'})` +
     (p.after ? ` | after: ${phaseLine(p.after)}` : '') +
     (p.notes.length ? ` | ${p.notes.join('; ')}` : '')
   );

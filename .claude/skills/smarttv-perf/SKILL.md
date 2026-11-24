@@ -30,6 +30,24 @@ streams are dropped in preflight; a run uses whatever streams respond.
   Deep dive uses `HeapProfiler` allocation sampling.
 - **Costs**: SDK = no-sender − without; Sender = sender − no-sender, as the **median
   of paired per-video run differences** (never median − median).
+- **Dropped frames** (playback quality, the web equivalent of the Roku decoderStats
+  metric): `HTMLVideoElement.getVideoPlaybackQuality()`
+  (`droppedVideoFrames / totalVideoFrames`), read at the end of each playback — works on
+  **all** engines including webOS 4 (Chrome 42+).
+
+**Per-engine capture** — the long run auto-detects what the webview provides, and the
+report's **"Measurement tools"** section names the actual source per metric:
+- Modern engines (Vizio, webOS 5+, Tizen 5+) have the CDP `Performance` domain → CPU
+  from `TaskDuration`, retained heap from `JSHeapUsedSize` (used / peak / leak-slope).
+- **webOS 4 (Chromium 53)** has **no `Performance` domain and no console-event delivery**,
+  and `performance.memory` / `Runtime.getHeapUsage` are stubbed/absent, so the harness
+  falls back:
+  - **CPU** ← `Profiler` domain (sampling profile, idle-excluded busy %)
+  - **Memory allocated** ← `HeapProfiler` sampling allocation profiler (bytes/phase — a
+    churn signal, not retained heap; the SDK's extra allocation is the cost)
+  - **Retained heap / leak-slope** → `n/a` (full heap snapshots hang — not viable)
+  - **VST + phase readiness** ← polled over `Runtime.evaluate` (not console markers)
+  - For retained-heap + leak-slope fidelity, run the measurement on **Vizio**.
 
 The "without Vizbee" build is the same bundle with continuity init gated off
 (`VZB_ENABLED=false` → Vite define). Grafana and HomeSSO stay constant, so they

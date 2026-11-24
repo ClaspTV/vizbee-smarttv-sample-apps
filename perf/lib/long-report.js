@@ -30,6 +30,17 @@ function med(xs) {
   return v.length ? median(v) : null;
 }
 
+/** Dropped-frame % over a case's playbacks: total dropped / total frames.
+ * @param {PlayResult[]} plays @returns {number | null} */
+function droppedPctFor(plays) {
+  const ok = plays.filter((p) => typeof p.totalFrames === 'number' && p.totalFrames > 0);
+  if (!ok.length) return null;
+  return (
+    (100 * ok.reduce((a, p) => a + (p.droppedFrames || 0), 0)) /
+    ok.reduce((a, p) => a + /** @type {number} */ (p.totalFrames), 0)
+  );
+}
+
 /** @param {number | null} v @param {number} d */
 const fmtV = (v, d) => (v === null ? 'n/a' : v.toFixed(d));
 
@@ -45,16 +56,20 @@ const ROWS = /** @type {Array<[string, string, number, ((c: CaseResult) => numbe
   ['Home page', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => (c.home ? c.home.cpu : null), 'cpu'],
   ['Memory used', 'MB', 1, (c) => (c.home ? c.home.usedEndMB : null), 'mem'],
+  ['Memory allocated', 'MB', 1, (c) => (c.home ? c.home.allocMB : null), 'alloc'],
   ['Heap slope', 'MB/min', 2, (c) => (c.home ? c.home.slopeMBMin : null), 'mem'],
   ['Playback (median of the playbacks)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => p.play.cpu)), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedEndMB)), 'mem'],
   ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedPeakMB)), 'mem'],
+  ['Memory allocated', 'MB', 1, (c) => med(c.plays.map((p) => p.play.allocMB)), 'alloc'],
   ['Heap slope (leak signal)', 'MB/min', 2, (c) => med(c.plays.map((p) => p.play.slopeMBMin)), 'mem'],
   ['Video start time (VST)', 's', 2, (c) => med(c.plays.map((p) => p.vstSecs)), 'vst'],
+  ['Dropped frames', '%', 2, (c) => droppedPctFor(c.plays), 'frames'],
   ['Home page after each playback (median)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.cpu : null))), 'cpu'],
   ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedEndMB : null))), 'mem'],
+  ['Memory allocated', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.allocMB : null))), 'alloc'],
 ]);
 
 /**
@@ -79,7 +94,14 @@ function capability(r) {
   const cpuAvailable = ps.some((p) => p && p.cpu > 0);
   const mem = ps.map((p) => p && p.usedEndMB).filter((x) => typeof x === 'number');
   const memReliable = new Set(mem.map((v) => Math.round(/** @type {number} */ (v) * 10))).size > 1;
-  return { cpuAvailable, memReliable };
+  const allocAvailable = ps.some((p) => p && typeof p.allocMB === 'number' && p.allocMB > 0);
+  let framesAvailable = false;
+  for (const k of Object.keys(r)) {
+    const c = r[k];
+    if (!c) continue;
+    for (const p of c.plays) if (typeof p.totalFrames === 'number' && p.totalFrames > 0) framesAvailable = true;
+  }
+  return { cpuAvailable, memReliable, allocAvailable, framesAvailable };
 }
 
 /** Cases present, in preferred order. @param {LongResults} r */
@@ -94,10 +116,14 @@ function presentCases(r) {
 function longTable(r) {
   const cases = presentCases(r);
   const has = (/** @type {string} */ k) => cases.some(([x]) => x === k);
-  const { cpuAvailable, memReliable } = capability(r);
+  const { cpuAvailable, memReliable, allocAvailable, framesAvailable } = capability(r);
   return ROWS.map(([label, unit, d, get, kind]) => {
     if (!get) return { group: label };
-    const na = (kind === 'cpu' && !cpuAvailable) || (kind === 'mem' && !memReliable);
+    const na =
+      (kind === 'cpu' && !cpuAvailable) ||
+      (kind === 'mem' && !memReliable) ||
+      (kind === 'alloc' && !allocAvailable) ||
+      (kind === 'frames' && !framesAvailable);
     /** @type {Record<string, number | null>} */
     const v = {};
     for (const [k] of cases) v[k] = get(r[k]);
@@ -113,7 +139,7 @@ function longTable(r) {
 /** One row per playback. @param {LongResults} r @param {Record<string, LongVideo>} videos */
 function playRows(r, videos) {
   const x = (/** @type {any} */ v, d = 1) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '-');
-  const { cpuAvailable, memReliable } = capability(r);
+  const { cpuAvailable, memReliable, framesAvailable } = capability(r);
   const cpuC = (/** @type {any} */ v) => (cpuAvailable ? x(v, 2) : 'n/a');
   const memC = (/** @type {any} */ v, d = 1) => (memReliable ? x(v, d) : 'n/a');
   /** @type {string[][]} */
@@ -130,6 +156,7 @@ function playRows(r, videos) {
         memC(p.play.usedPeakMB),
         memC(p.play.slopeMBMin, 2),
         x(p.vstSecs, 2),
+        !framesAvailable ? 'n/a' : p.totalFrames ? `${x(p.droppedPct, 2)} (${p.droppedFrames}/${p.totalFrames})` : '-',
         p.after ? cpuC(p.after.cpu) : '-',
         p.after ? memC(p.after.usedEndMB) : '-',
       ]);
@@ -147,9 +174,11 @@ function notesFor(meta, r, videos) {
     `Each case: warm-up playback ${meta.warmupSecs}s, home page ${mins(meta.idleSecs)}, then ${meta.plays} playbacks of ${mins(meta.playSecs)}, each followed by ${meta.afterSecs}s on the home page`,
     'One app session per case: after a single boot, phases move home <-> player through the app router (in-page, no reload), so the JS heap carries across playbacks like the Roku long run. Leak signals: the per-playback heap slope (MB/min) and the memory-by-playback progression below. If the __PERF_HOOKS__ build hook is absent the run falls back to full reloads between phases (noted per case) and only the within-playback slope is meaningful',
     'Costs: SDK cost = With Vizbee (no sender) - Without Vizbee; Sender cost = With Vizbee (sender) - With Vizbee (no sender) (differences of the values in the table)',
-    'CPU average: Performance.getMetrics TaskDuration delta / wall per 5 s (main-thread proxy). Memory used = average of the last 60 s of each phase (JSHeapUsedSize); peak = max over the phase',
-    'Heap slope: least-squares slope of JSHeapUsedSize over the whole phase, in MB/min - a steady positive playback slope is the leak signal',
-    'Video start time (VST): deep-link navigate -> the [VZBPERF] video playing marker, wall clock',
+    'CPU average: main-thread busy fraction - Performance.getMetrics TaskDuration where available, else the Profiler domain (idle-excluded sampling, used on webOS 4). Memory used = average of the last 60 s of each phase (JSHeapUsedSize); peak = max over the phase',
+    'Heap slope: least-squares slope of JSHeapUsedSize over the whole phase, in MB/min - a steady positive playback slope is the leak signal (retained heap; n/a where unavailable)',
+    'Memory allocated: total bytes allocated during the phase via the HeapProfiler sampling profiler - an allocation / churn signal, not retained heap; on webOS 4 it is the only available memory metric',
+    'Video start time (VST): deep-link navigate -> video playing (polled over CDP), wall clock',
+    'Dropped frames: HTMLVideoElement.getVideoPlaybackQuality() at the end of each playback; the case value = all its playbacks together (total dropped / total frames)',
   ];
   const cap = capability(r);
   if (cap.memReliable) {
@@ -171,10 +200,53 @@ function notesFor(meta, r, videos) {
       .filter(Boolean)
       .join(' and ');
     n.unshift(
-      `Engine limits on this webview (Chromium 53 / webOS 4): ${missing} are not measurable here and are shown as n/a. VST is measured. For full CPU + memory fidelity, run the measurement on Vizio.`,
+      `Engine limits on this webview (Chromium 53 / webOS 4): ${missing} are not measurable here and are shown as n/a. Measured instead: CPU (Profiler domain), Memory allocated (HeapProfiler sampling) and VST. For retained-heap size and leak slope, run the measurement on Vizio.`,
     );
   }
   return n;
+}
+
+/**
+ * Per-metric tool / source actually used, inferred from what the engine
+ * provided (memReliable => the CDP Performance domain was present).
+ * @param {LongResults} r
+ * @returns {string[][]}
+ */
+function toolsFor(r) {
+  const { cpuAvailable, memReliable, allocAvailable, framesAvailable } = capability(r);
+  return [
+    [
+      'CPU average',
+      cpuAvailable
+        ? memReliable
+          ? 'CDP Performance.getMetrics - TaskDuration delta / wall'
+          : 'CDP Profiler domain - sampling profile, idle-excluded busy %'
+        : 'n/a',
+    ],
+    [
+      'Memory used / peak',
+      memReliable
+        ? 'CDP Performance.getMetrics - JSHeapUsedSize'
+        : 'n/a - performance.memory stubbed, Runtime.getHeapUsage absent (webOS 4)',
+    ],
+    [
+      'Heap slope (leak signal)',
+      memReliable ? 'JSHeapUsedSize least-squares slope over the phase' : 'n/a - needs retained heap',
+    ],
+    [
+      'Memory allocated',
+      allocAvailable
+        ? 'CDP HeapProfiler - sampling allocation profiler (bytes/phase)'
+        : 'n/a',
+    ],
+    ['Video start time (VST)', 'CDP Page.navigate -> poll video.readyState>=2 & currentTime>0'],
+    [
+      'Dropped frames',
+      framesAvailable
+        ? 'HTMLVideoElement.getVideoPlaybackQuality() - droppedVideoFrames / totalVideoFrames'
+        : 'n/a',
+    ],
+  ];
 }
 
 /**
@@ -190,6 +262,7 @@ export function writeLongReport(outDir, meta, r, videos) {
   const table = longTable(r);
   const rows = playRows(r, videos);
   const notes = notesFor(meta, r, videos);
+  const tools = toolsFor(r);
   const mins = (/** @type {number} */ s) => (s >= 60 ? `${+(s / 60).toFixed(1)} min` : `${s}s`);
   const title = 'Vizbee JS SDK - long playback (smart TV)';
   const dev = meta.device || {};
@@ -213,8 +286,9 @@ export function writeLongReport(outDir, meta, r, videos) {
 
   /** @type {import('./pdf.js').Column[]} */
   const pcols = [
-    ['Case', 128], ['#', 18], ['Video', 92], ['Played', 44], ['CPU %', 42], ['Used MB', 48],
-    ['Peak MB', 48], ['Slope MB/min', 62], ['VST s', 40], ['After CPU %', 58], ['After MB', 50],
+    ['Case', 120], ['#', 18], ['Video', 84], ['Played', 44], ['CPU %', 42], ['Used MB', 48],
+    ['Peak MB', 48], ['Slope MB/min', 62], ['VST s', 40], ['Dropped % (n/total)', 96],
+    ['After CPU %', 58], ['After MB', 50],
   ];
 
   const doc = pdfDoc();
@@ -225,6 +299,9 @@ export function writeLongReport(outDir, meta, r, videos) {
   doc.gap(10);
   doc.heading('Each playback   (After = the home page right after that playback)');
   doc.table(pcols, rows);
+  doc.gap(10);
+  doc.heading('Measurement tools');
+  doc.table([['Metric', 170], ['Tool / source', 550]], tools);
   doc.gap(10);
   doc.heading('Notes');
   notes.forEach((s) => doc.para('- ' + s));
@@ -246,6 +323,7 @@ export function writeLongReport(outDir, meta, r, videos) {
     md += 'group' in x ? `| **${x.group}** |${' |'.repeat(cols.length - 1)}\n` : mdRow(cells(x));
   }
   md += '\n## Each playback\n\n' + mdRow(pcols.map((c) => c[0])) + mdSep(pcols.length) + rows.map(mdRow).join('');
+  md += '\n## Measurement tools\n\n' + mdRow(['Metric', 'Tool / source']) + mdSep(2) + tools.map(mdRow).join('');
   md += `\n## Notes\n\n${notes.map((s) => `- ${s}`).join('\n')}\n`;
   if (runNotes.length) md += `\n## Run notes\n\n${runNotes.join('\n')}\n`;
   fs.writeFileSync(path.join(outDir, 'summary.md'), md);
