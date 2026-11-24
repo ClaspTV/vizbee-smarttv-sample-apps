@@ -170,7 +170,7 @@ function notesFor(meta, r, videos) {
   const mins = (/** @type {number} */ s) => (s >= 60 ? `${+(s / 60).toFixed(1)} min` : `${s} s`);
   /** @type {string[]} */
   const n = [
-    `Run order: ${presentCases(r).map(([, l]) => l).join(' > ')}; one served build per case`,
+    `Run order: ${(meta.parts ?? []).map((/** @type {string} */ k) => r[k]?.label ?? k).join(' > ') || presentCases(r).map(([, l]) => l).join(' > ')}; one served build per case`,
     `Each case: warm-up playback ${meta.warmupSecs}s, home page ${mins(meta.idleSecs)}, then ${meta.plays} playbacks of ${mins(meta.playSecs)}, each followed by ${meta.afterSecs}s on the home page`,
     'One app session per case: after a single boot, phases move home <-> player through the app router (in-page, no reload), so the JS heap carries across playbacks like the Roku long run. Leak signals: the per-playback heap slope (MB/min) and the memory-by-playback progression below. If the __PERF_HOOKS__ build hook is absent the run falls back to full reloads between phases (noted per case) and only the within-playback slope is meaningful',
     'Costs: SDK cost = With Vizbee (no sender) - Without Vizbee; Sender cost = With Vizbee (sender) - With Vizbee (no sender) (differences of the values in the table)',

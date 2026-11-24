@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * Full run into one folder: perf-e2e (numbers + report.pdf), then perf-deep
  * (cpu.pdf + memory.pdf under deep/), then perf-findings if a findings.json
- * was produced. Env is passed through (VIZIO_IP, PERF_RUNS, PERF_*_MS).
+ * was produced. Env is passed through (VIZIO_IP, PERF_RUNS, PERF_*_MS); flags
+ * (--platform, --es6, --sender, --cases) are passed to perf-e2e and perf-deep.
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,16 +29,19 @@ function run(script, args, env) {
   if (r.status !== 0) throw new Error(`${script} exited ${r.status}`);
 }
 
+/** CLI flags forwarded to the child scripts. */
+const FLAGS = process.argv.slice(2);
+
 function main() {
   const outDir = path.join(HERE, 'perf-results', stamp());
   fs.mkdirSync(outDir, { recursive: true });
   console.log(`=== perf-all -> ${outDir} ===`);
 
   console.log('\n--- [1/3] e2e (numbers + report.pdf) ---');
-  run('perf-e2e.js', [], { PERF_OUT_DIR: outDir });
+  run('perf-e2e.js', FLAGS, { PERF_OUT_DIR: outDir });
 
   console.log('\n--- [2/3] deep dive (cpu.pdf + memory.pdf) ---');
-  run('perf-deep.js', [outDir]);
+  run('perf-deep.js', [outDir, ...FLAGS]);
 
   const findings = path.join(outDir, 'findings.json');
   if (fs.existsSync(findings)) {

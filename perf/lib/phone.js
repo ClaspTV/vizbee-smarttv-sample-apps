@@ -33,6 +33,22 @@ export function findAdb() {
 }
 
 /** An Android phone running the Vizbee demo app, driven over adb + UI Automator. */
+/**
+ * Serial of the phone to drive: PHONE_SERIAL, else the first attached adb device.
+ * @param {string} adb
+ * @returns {string}
+ */
+export function phoneSerial(adb) {
+  if (process.env.PHONE_SERIAL) return process.env.PHONE_SERIAL;
+  const serial = execFileSync(adb, ['devices'], { encoding: 'utf8' })
+    .split('\n')
+    .slice(1)
+    .map((l) => l.split('\t'))
+    .find((f) => f[1] === 'device')?.[0];
+  if (!serial) throw new Error('no adb device attached');
+  return serial;
+}
+
 export class Phone {
   /** @param {string} adb @param {string} serial */
   constructor(adb, serial) {

@@ -39,7 +39,8 @@ export const PLATFORMS = {
     mode: 'tizen',
     elPackage: { es5: '@vizbeetv/sdk/samsung-el/es5', es6: '@vizbeetv/sdk/samsung-el/es6' },
     device: 'tizen',
-    validated: false,
+    // Validated end-to-end on a 2019 UN49RU8000 (Tizen 5.0 / Chromium 63).
+    validated: true,
   },
 };
 

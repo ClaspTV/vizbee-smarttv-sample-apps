@@ -26,7 +26,13 @@ export class TizenDevice {
   /** Launch-into-debug + forward the inspector port locally. @returns {string} base url */
   _forward() {
     if (this.forwarded) return `http://127.0.0.1:${this.localPort}`;
-    const dbg = spawnSync('sdb', ['shell', '0', 'debug', this.appId, '300'], { encoding: 'utf8' });
+    // Reconnect (sdb drops idle TCP links), kill a running instance (debug-launch
+    // hangs otherwise; was_kill is refused on retail images), then debug-launch.
+    // Tizen 5.0 rejects a trailing timeout arg.
+    if (process.env.TIZEN_IP) spawnSync('sdb', ['connect', process.env.TIZEN_IP], { encoding: 'utf8', timeout: 15000 });
+    const pkgId = this.appId.split('.')[0];
+    spawnSync('sdb', ['shell', '0', 'kill', pkgId], { encoding: 'utf8', timeout: 15000 });
+    const dbg = spawnSync('sdb', ['shell', '0', 'debug', this.appId], { encoding: 'utf8', timeout: 30000 });
     const out = `${dbg.stdout ?? ''}${dbg.stderr ?? ''}`;
     const m = out.match(/port:\s*(\d+)/i);
     if (!m) throw new Error(`sdb debug: no port in output:\n${out}`);
@@ -42,9 +48,22 @@ export class TizenDevice {
   /** @returns {Promise<any[]>} */
   async listTargets() {
     const base = this._forward();
-    const res = await fetch(`${base}/json`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`/json HTTP ${res.status}`);
-    return /** @type {any[]} */ (await res.json());
+    // The inspector port is reported before the inspector listens: retry ~30s.
+    /** @type {unknown} */
+    let last;
+    for (let i = 0; i < 15; i++) {
+      try {
+        const res = await fetch(`${base}/json`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(`/json HTTP ${res.status}`);
+        const targets = /** @type {any[]} */ (await res.json());
+        if (targets.length) return targets;
+        last = new Error('/json returned no targets');
+      } catch (e) {
+        last = e;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(`Tizen inspector /json: ${/** @type {Error} */ (last)?.message ?? last}`);
   }
 
   /** @returns {Promise<boolean>} */

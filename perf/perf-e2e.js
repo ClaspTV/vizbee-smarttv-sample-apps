@@ -13,13 +13,15 @@ import { runCase } from './lib/runner.js';
 import { summarize, textTable } from './lib/report.js';
 import { buildReportPdf } from './lib/pdf-report.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
+import { findAdb, Phone, phoneSerial } from './lib/phone.js';
 
 /**
  * End-to-end perf run. Vizio is validated; webOS/Tizen share the code path but
  * need on-device validation of their device adapter.
  *
- * Env: VIZIO_IP, PERF_RUNS (3), PERF_HOME_MS / PERF_PLAY_MS (180000), PERF_OUT_DIR.
- * Flags: --platform vizio|webos|tizen (default vizio), --es6, --sender, --check.
+ * Env: VIZIO_IP, PERF_RUNS (3), PERF_HOME_MS / PERF_PLAY_MS (180000), PERF_OUT_DIR,
+ *      PHONE_SERIAL (adb serial; default the first device), PERF_TV_NAME (sender case).
+ * Flags: --platform vizio|webos|tizen (default vizio), --es6, --sender, --cases k,k, --check.
  */
 const IP = process.env.VIZIO_IP ?? '10.0.0.141';
 const RUNS = Number(process.env.PERF_RUNS ?? 3);
@@ -89,6 +91,28 @@ async function main() {
     if (withSender) cases.push({ ...CASES.sender, npmPackage: pkg });
   }
 
+  // Sender phone (adb). The demo app is stopped for the other cases so it cannot
+  // auto-reconnect to the TV and contaminate them.
+  /** @type {Phone | null} */
+  let phone = null;
+  const tvName = process.env.PERF_TV_NAME ?? '';
+  if (cases.some((c) => c.sender)) {
+    try {
+      const adb = findAdb();
+      if (!adb) throw new Error('adb not found');
+      const serial = phoneSerial(adb);
+      if (!tvName) throw new Error('PERF_TV_NAME is not set (the TV name in the phone picker)');
+      phone = new Phone(adb, serial);
+      phone.keepAwake();
+      await phone.restartApp();
+      await phone.ensureDisconnected();
+      console.log(`sender phone ${serial} ready (TV "${tvName}")`);
+    } catch (e) {
+      console.warn(`! sender phone unavailable (${/** @type {Error} */ (e).message}); sender case runs without a connect`);
+      phone = null;
+    }
+  }
+
   /** @type {Record<string, import('./lib/runner.js').RunResult[]>} */
   const byCase = {};
   for (const c of cases) {
@@ -98,6 +122,15 @@ async function main() {
     buildVariant({ withVizbee: c.withVizbee, npmPackage: c.npmPackage, mode: platform.mode, outDir });
     const served = await serve(outDir, PORT);
     console.log(`serving ${served.url}`);
+    if (phone) {
+      if (c.sender) {
+        await phone.restartApp();
+        await phone.ensureDisconnected();
+      } else {
+        await phone.ensureDisconnected().catch(() => {});
+        phone.forceStop();
+      }
+    }
     const dev = makeDevice(platform, devOpts);
     try {
       byCase[c.key] = await runCase({
@@ -110,6 +143,8 @@ async function main() {
         writeSample,
         homeMs: HOME_MS,
         playMs: PLAY_MS,
+        phone: c.sender ? phone : null,
+        tvName,
       });
     } finally {
       dev.close();
@@ -117,6 +152,15 @@ async function main() {
     }
   }
   raw.end();
+  if (phone) {
+    await phone.ensureDisconnected().catch(() => {});
+    try {
+      phone.forceStop();
+      phone.restoreAwake();
+    } catch {
+      /* ignore */
+    }
+  }
 
   const s = summarize(byCase);
   const table = textTable(s, CASES);

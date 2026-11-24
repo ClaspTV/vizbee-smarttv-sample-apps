@@ -11,7 +11,7 @@ import { CASES, LONG_VIDEOS, LONG_VIDEO, LONG_FALLBACK } from './lib/cases.js';
 import { runLongCase, longEnough } from './lib/long.js';
 import { writeLongReport } from './lib/long-report.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
-import { findAdb, Phone } from './lib/phone.js';
+import { findAdb, Phone, phoneSerial } from './lib/phone.js';
 
 /**
  * Long playback run: one served build per case, a long home page, then several
@@ -116,7 +116,10 @@ async function main() {
   let phone = null;
   if (cases.some((c) => c.sender)) {
     try {
-      phone = new Phone(findAdb(), process.env.PHONE_SERIAL);
+      const adb = findAdb();
+      if (!adb) throw new Error('adb not found');
+      phone = new Phone(adb, phoneSerial(adb));
+      phone.keepAwake();
     } catch (e) {
       console.warn(`! phone unavailable (${/** @type {Error} */ (e).message}); sender case runs without a connect`);
     }
@@ -186,6 +189,11 @@ async function main() {
     buildVariant({ withVizbee: c.withVizbee, npmPackage: c.npmPackage, mode: platform.mode, outDir, perfHooks: true });
     const served = await serve(outDir, PORT);
     console.log(`serving ${served.url}`);
+    if (phone && !c.sender) {
+      // Keep the demo app from auto-reconnecting during the no-sender cases.
+      await phone.ensureDisconnected().catch(() => {});
+      try { phone.forceStop(); } catch { /* ignore */ }
+    }
     const dev = makeDevice(platform, devOpts);
     try {
       results[c.key] = await runLongCase({
@@ -220,6 +228,10 @@ async function main() {
     }
   }
   raw.end();
+  if (phone) {
+    await phone.ensureDisconnected().catch(() => {});
+    try { phone.forceStop(); phone.restoreAwake(); } catch { /* ignore */ }
+  }
 
   meta.inProgress = false;
   fs.rmSync(path.join(outRoot, 'results.partial.json'), { force: true });

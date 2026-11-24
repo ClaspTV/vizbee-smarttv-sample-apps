@@ -2,9 +2,11 @@
 'use strict';
 
 import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LEGACY_POLYFILLS } from './legacy-polyfills.js';
 
 /** Repo root (perf/ lives one level under it). */
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -59,6 +61,9 @@ export function buildVariant({
   };
   const args = ['vite', 'build', '--mode', mode, '--outDir', outDir];
   if (!minify) args.push('--minify', 'false');
+  // Tizen 5.0 (2019) is Chromium 63: chrome63 target, one bundle, no plugin-legacy,
+  // inline polyfills, optional local SDK swap (see perf/vite.legacy.config.ts).
+  if (mode === 'tizen') args.push('--config', 'perf/vite.legacy.config.ts');
   const r = spawnSync('npx', args, {
     cwd: REPO,
     env,
@@ -67,7 +72,13 @@ export function buildVariant({
   if (r.status !== 0) {
     throw new Error(`vite build failed (${outDir}):\n${r.stdout ?? ''}\n${r.stderr ?? ''}`);
   }
-  return path.resolve(REPO, outDir);
+  const abs = path.resolve(REPO, outDir);
+  if (mode === 'tizen') {
+    const html = path.join(abs, 'index.html');
+    const src = fs.readFileSync(html, 'utf8');
+    if (!src.includes('__legacyPolyfills')) fs.writeFileSync(html, src.replace('<head>', `<head>${LEGACY_POLYFILLS}`));
+  }
+  return abs;
 }
 
 /**
@@ -81,13 +92,22 @@ export function serve(outDir, port) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'npx',
-      ['vite', 'preview', '--outDir', outDir, '--host', '--port', String(port)],
-      { cwd: REPO },
+      ['vite', 'preview', '--outDir', outDir, '--host', '--port', String(port), '--strictPort'],
+      // Own process group: `npx` wraps vite in `npm exec`, and killing only the
+      // wrapper orphans vite on the port (the next case would then get the old build).
+      { cwd: REPO, detached: true },
     );
+    const stop = () => {
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGTERM');
+      } catch {
+        child.kill();
+      }
+    };
     let settled = false;
     const finish = () => {
       settled = true;
-      resolve({ url: `http://${lanIp()}:${port}/`, stop: () => child.kill() });
+      resolve({ url: `http://${lanIp()}:${port}/`, stop });
     };
     const onData = (/** @type {Buffer} */ b) => {
       if (!settled && /Local:|Network:/.test(b.toString())) finish();

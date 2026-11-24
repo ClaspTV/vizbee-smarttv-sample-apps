@@ -8,7 +8,7 @@ import { makeDevice } from './lib/device/index.js';
 import { buildVariant, serve } from './lib/build.js';
 import { preflight } from './lib/preflight.js';
 import { getPlatform } from './lib/platforms.js';
-import { waitForMarker } from './lib/runner.js';
+import { waitForMarker, waitForPlayback } from './lib/runner.js';
 import { captureCpuProfile, captureHeapProfile } from './lib/profile.js';
 import { buildDeepPdf } from './lib/pdf-deep.js';
 import { MARKER_TIMEOUT_MS } from './lib/constants.js';
@@ -39,13 +39,15 @@ function stamp() {
 async function main() {
   const platform = getPlatform(argVal('--platform') ?? 'vizio');
   const pkg = process.argv.includes('--es6') ? platform.elPackage.es6 : platform.elPackage.es5;
-  const argDir = process.argv.slice(2).find((a) => !a.startsWith('--'));
+  const valued = new Set(['--platform', '--cases']);
+  const argDir = process.argv.slice(2).find((a, i, all) => !a.startsWith('--') && !valued.has(all[i - 1] ?? ''));
   const outDirResults = argDir
     ? path.join(argDir, 'deep')
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'perf-results', stamp(), 'deep');
   fs.mkdirSync(outDirResults, { recursive: true });
 
-  const pf = await preflight(IP);
+  const devOpts = { ip: IP, device: process.env.WEBOS_DEVICE, appId: process.env.VZB_APP_ID };
+  const pf = await preflight(makeDevice(platform, devOpts), platform.label);
   pf.lines.forEach((l) => console.log(l));
   if (!pf.ok) {
     console.error('preflight FAILED');
@@ -65,11 +67,7 @@ async function main() {
   const served = await serve(buildDir, PORT);
   console.log(`serving ${served.url}`);
 
-  const dev = makeDevice(platform, {
-    ip: IP,
-    device: process.env.WEBOS_DEVICE,
-    appId: process.env.VZB_APP_ID,
-  });
+  const dev = makeDevice(platform, devOpts);
   try {
     const cdp = await dev.attach();
     await cdp.send('Runtime.enable');
@@ -78,8 +76,10 @@ async function main() {
     await dev.navigate(served.url);
     await launched;
 
-    const playing = waitForMarker(cdp, '[VZBPERF] video playing', MARKER_TIMEOUT_MS);
-    await cdp.evaluate(`location.hash = '#/player/${video.id}'`);
+    // Fresh deep-link load (as perf-e2e does): an in-page hash change while the SDK
+    // is still initializing can leave the player stuck on some TVs.
+    const playing = waitForPlayback(cdp, '[VZBPERF] video playing');
+    await dev.navigate(`${served.url}#/player/${video.id}`);
     await playing;
 
     console.log(`profiling ${PROFILE_MS / 1000}s (CPU + heap, playback) ...`);
