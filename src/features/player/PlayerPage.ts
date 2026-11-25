@@ -5,6 +5,27 @@ import { attachMuxMonitor } from '@/services/mux/mux';
 
 const SEEK_STEP_SEC = 10;
 
+let sharedVideoEl: HTMLVideoElement | undefined;
+
+function acquirePlayerVideo(posterUrl: string): HTMLVideoElement {
+  if (!sharedVideoEl) {
+    sharedVideoEl = document.createElement('video');
+    sharedVideoEl.className = 'player__video';
+    sharedVideoEl.preload = 'auto';
+  }
+  const el = sharedVideoEl;
+  el.autoplay = true;
+  el.poster = posterUrl;
+  return el;
+}
+
+function detachMuxMonitor(videoEl: HTMLVideoElement): void {
+  const monitored = videoEl as unknown as { mux?: { destroy?: () => void } };
+  try {
+    monitored.mux?.destroy?.();
+  } catch {}
+}
+
 export function renderPlayerPage(
   root: HTMLElement,
   params: Record<string, string>,
@@ -20,11 +41,7 @@ export function renderPlayerPage(
   const page = document.createElement('div');
   page.className = 'player-page';
 
-  const videoEl = document.createElement('video');
-  videoEl.className = 'player__video';
-  videoEl.poster = video.posterUrl;
-  videoEl.preload = 'auto';
-  videoEl.autoplay = true;
+  const videoEl = acquirePlayerVideo(video.posterUrl);
   const detachSource = attachVideoSource(videoEl, video);
   videoEl.addEventListener(
     'playing',
@@ -350,6 +367,7 @@ export function renderPlayerPage(
     videoEl.removeEventListener('ended',          onVzbEnded);
     videoEl.removeEventListener('waiting',        onVzbWaiting);
     videoEl.removeEventListener('error',          onVzbError);
+    detachMuxMonitor(videoEl);
     detachSource();
     videoEl.removeAttribute('src');
     videoEl.load();

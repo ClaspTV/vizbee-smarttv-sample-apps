@@ -23,9 +23,16 @@ export class GrafanaService {
         webVitalsInstrumentation: {
           reportAllChanges: true,
         },
-        // Don't trace the Vizbee SDK's PubNub traffic: it polls on every sender message,
-        // and each traced request holds an XHR + PerformanceObserver until it ends.
-        ignoreUrls: [/pndsn\.com/, /pubnub\.(com|net)/],
+        // Don't trace high-frequency background/media traffic: each traced request holds
+        // an XHR + PerformanceObserver until it ends. PubNub polls per sender message; HLS
+        // pulls a segment every few seconds — both accumulate across a long session.
+        ignoreUrls: [
+          /pndsn\.com/,
+          /pubnub\.(com|net)/,
+          /\.m3u8(\?|$)/,
+          /\.(ts|m4s|mp4|aac|vtt|cmfv|cmfa)(\?|$)/,
+          /picsum\.photos/,
+        ],
         instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
       });
       if (this.pendingRenderMs !== null) {
