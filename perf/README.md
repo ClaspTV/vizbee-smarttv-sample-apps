@@ -34,8 +34,17 @@ node perf-e2e.js --check --platform vizio|webos|tizen   # preflight
 node perf-all.js --platform <p> [--sender]               # full run: numbers + deep dive + findings
 node perf-long.js --platform <p> [--sender]              # long run: 10 min home + 4 x 10 min playback per case; report + analysis + issues
 MUX_ENV_KEY=<key> node perf-long.js --platform <p> --mux # long run, three-way: baseline · Only Mux · Vizbee+sender (Vizbee cost + Mux cost)
+node perf-report.js <run dir> [--platform <p>]           # rebuild report.pdf + external/ from a saved run
+node perf-external.js <run dir> [--sdk-label "<label>"]  # (re)write the shareable external/ folder only
 node --test && npm run check                             # unit tests + type-check (npm install here first)
 ```
+
+Output: `perf-results/<cases>_<platform>_<mmddyyyy>/` (e.g. `no-vizbee+vizbee+vizbee-sender_vizio_11252026`).
+Each `report.pdf` gives CPU and memory as **average, p95 and peak** and ends with a
+per-metric **Measurement tools** table. Every run also writes `<run dir>/external/`
+— the customer-shareable subset (`report.pdf`, `summary.md`, `comparison.csv`,
+`data/`), stripped of local paths, device IP/serial and runner internals; share only
+that folder. Override the SDK name shown there with `--sdk-label`.
 
 Tizen: `TIZEN_IP=<ip> VZB_APP_ID=<pkg.app>`. Sender: `PERF_TV_NAME="<TV name>"`
 (+ optional `PHONE_SERIAL`). Local SDK build: `PERF_SDK_DIR=<SDK repo>/dist/npm`.

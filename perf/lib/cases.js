@@ -46,6 +46,24 @@ export const LONG_VIDEOS = {
     durationSec: 6180,
     url: 'https://devstreaming-cdn.apple.com/videos/wwdc/2017/102xyar2647hak3e/102/hls_vod_mvp.m3u8',
   },
+  'tears-of-steel': {
+    id: 'tears-of-steel',
+    title: 'Tears of Steel',
+    durationSec: 734,
+    url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+  },
+  'apple-bipbop': {
+    id: 'apple-bipbop',
+    title: 'Apple BipBop',
+    durationSec: 600,
+    url: 'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+  },
+  'mux-test-stream': {
+    id: 'mux-test-stream',
+    title: 'Mux Test Stream',
+    durationSec: 888,
+    url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+  },
 };
 
 /** Default long video and ordered fallbacks if it will not play. */

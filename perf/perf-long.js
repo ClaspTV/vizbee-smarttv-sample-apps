@@ -8,11 +8,13 @@ import { makeDevice } from './lib/device/index.js';
 import { buildVariant, serve } from './lib/build.js';
 import { getPlatform } from './lib/platforms.js';
 import { CASES, LONG_VIDEOS, LONG_VIDEO, LONG_FALLBACK } from './lib/cases.js';
-import { runLongCase, longEnough } from './lib/long.js';
+import { runLongCase, longEnough, backfillLongP95 } from './lib/long.js';
 import { writeLongReport } from './lib/long-report.js';
 import { writeLongFindings } from './lib/long-findings.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
 import { findAdb, Phone, phoneSerial } from './lib/phone.js';
+import { resultDir, caseSlugs } from './lib/constants.js';
+import { writeExternalAfterRun } from './lib/external.js';
 
 /**
  * Long playback run: one served build per case, a long home page, then several
@@ -67,9 +69,11 @@ async function main() {
   if (reportDir) {
     const dir = path.resolve(reportDir);
     const { meta, results } = JSON.parse(fs.readFileSync(path.join(dir, 'results.json'), 'utf8'));
+    backfillLongP95(dir, results);
     console.log(writeLongReport(dir, meta, results, LONG_VIDEOS));
     const rf = writeLongFindings(dir, meta, results);
     console.log(`analysis.pdf + issues.pdf from ${rf.source} (${rf.count} findings)`);
+    writeExternalAfterRun(dir);
     return;
   }
 
@@ -84,11 +88,21 @@ async function main() {
     after: Number(argVal('--after') ?? (dry ? 10 : 30)),
     warmup: Number(argVal('--warmup') ?? (dry ? 10 : 20)),
     video: argVal('--video') ?? LONG_VIDEO,
+    rotate: argVal('--videos') ? csv(/** @type {string} */ (argVal('--videos'))) : null,
     fallbacks: argVal('--fallback') ? csv(/** @type {string} */ (argVal('--fallback'))) : LONG_FALLBACK,
     videos: LONG_VIDEOS,
     allowReload: has('--allow-reload'),
     discIdle: Number(argVal('--disc-idle') ?? (dry ? 15 : 120)),
   };
+  if (o.rotate) {
+    for (const id of o.rotate) {
+      if (!LONG_VIDEOS[id]) throw new Error(`unknown --videos id "${id}" (${Object.keys(LONG_VIDEOS).join(', ')})`);
+      if (!longEnough(LONG_VIDEOS[id], o.play)) {
+        throw new Error(`--videos ${id} (${LONG_VIDEOS[id].durationSec}s) is too short for --play ${o.play}s`);
+      }
+    }
+    o.video = o.rotate[0];
+  }
   if (!LONG_VIDEOS[o.video]) throw new Error(`unknown --video "${o.video}" (${Object.keys(LONG_VIDEOS).join(', ')})`);
   if (!longEnough(LONG_VIDEOS[o.video], o.play)) {
     throw new Error(`--video ${o.video} (${LONG_VIDEOS[o.video].durationSec}s) is too short for --play ${o.play}s`);
@@ -124,8 +138,14 @@ async function main() {
   const reachable = await dev0.reachable();
   dev0.close();
   console.log(`${platform.label} ... ${reachable ? 'OK' : 'UNREACHABLE (open the app on the TV)'}`);
-  const videoUp = await streamOk(LONG_VIDEOS[o.video].url);
+  let videoUp = await streamOk(LONG_VIDEOS[o.video].url);
   console.log(`stream ${o.video} ... ${videoUp ? 'OK' : 'DOWN'}`);
+  for (const id of o.rotate ?? []) {
+    if (id === o.video) continue;
+    const up = await streamOk(LONG_VIDEOS[id].url);
+    console.log(`stream ${id} (rotation) ... ${up ? 'OK' : 'DOWN'}`);
+    videoUp = videoUp && up;
+  }
   for (const fb of o.fallbacks) {
     console.log(`stream ${fb} (fallback) ... ${(await streamOk(LONG_VIDEOS[fb].url)) ? 'OK' : 'DOWN'}`);
   }
@@ -149,15 +169,12 @@ async function main() {
     }
   }
 
-  const runDate = new Date().toISOString().slice(0, 10);
-  const outRoot =
-    process.env.PERF_OUT_DIR ??
-    path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      'perf-results',
-      `vizbee-sdk-long-${runDate}`,
-      platform.key,
-    );
+  const outRoot = resultDir({
+    root: path.dirname(fileURLToPath(import.meta.url)),
+    cases: caseSlugs(parts),
+    platform: platform.key,
+    flags: dry ? ['dry-run'] : [],
+  });
   fs.mkdirSync(outRoot, { recursive: true });
   const raw = fs.createWriteStream(path.join(outRoot, 'samples.jsonl'), { flags: 'a' });
   const writeSample = (/** @type {Record<string, unknown>} */ rec) => raw.write(JSON.stringify(rec) + '\n');
@@ -270,6 +287,7 @@ async function main() {
   } catch (e) {
     console.log(`  (findings update failed: ${/** @type {Error} */ (e).message})`);
   }
+  writeExternalAfterRun(outRoot, { platform: platform.label });
   console.log(`\nresults: ${outRoot}`);
 }
 

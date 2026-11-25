@@ -11,7 +11,7 @@ import { getPlatform } from './lib/platforms.js';
 import { waitForMarker, waitForPlayback } from './lib/runner.js';
 import { captureCpuProfile, captureHeapProfile } from './lib/profile.js';
 import { buildDeepPdf } from './lib/pdf-deep.js';
-import { MARKER_TIMEOUT_MS } from './lib/constants.js';
+import { MARKER_TIMEOUT_MS, mmddyyyy } from './lib/constants.js';
 
 /**
  * Deep dive: profile the with-Vizbee build (unminified, so frames carry real
@@ -31,11 +31,6 @@ function argVal(flag) {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/** @returns {string} */
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-}
-
 async function main() {
   const platform = getPlatform(argVal('--platform') ?? 'vizio');
   const pkg = process.argv.includes('--es6') ? platform.elPackage.es6 : platform.elPackage.es5;
@@ -43,7 +38,7 @@ async function main() {
   const argDir = process.argv.slice(2).find((a, i, all) => !a.startsWith('--') && !valued.has(all[i - 1] ?? ''));
   const outDirResults = argDir
     ? path.join(argDir, 'deep')
-    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'perf-results', stamp(), 'deep');
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'perf-results', `deep_${platform.key}_${mmddyyyy()}`, 'deep');
   fs.mkdirSync(outDirResults, { recursive: true });
 
   const devOpts = { ip: IP, device: process.env.WEBOS_DEVICE, appId: process.env.VZB_APP_ID };

@@ -2,15 +2,16 @@
 'use strict';
 
 import { pdfDoc } from './pdf.js';
-import { phaseMetrics } from './report.js';
+import { phaseMetrics, P95_NOTE } from './report.js';
+import { TOOL_COLS, toolRows } from './tools.js';
 
 /**
  * Build report.pdf: numbers table, per-run table, tools used, method notes.
  * @param {object} args
  * @param {ReturnType<import('./report.js').summarize>} args.summary
  * @param {Record<string, import('./runner.js').RunResult[]>} args.byCase
- * @param {Record<string, import('./cases.js').Case>} args.caseDefs
- * @param {{ platform: string, date: string, homeMs: number, playMs: number }} args.meta
+ * @param {Record<string, { label?: string }>} args.caseDefs
+ * @param {{ platform: string, date: string, homeMs: number, playMs: number, device?: any, intro?: string[], sdkCostLabel?: string, sdkVariant?: string, phone?: string | null, muxVersion?: string, muxEnvKey?: boolean, node?: string, tools?: { script: string, vizbee?: boolean, mux?: boolean, phone?: boolean, vitals?: boolean, video?: boolean, external?: boolean } }} args.meta
  * @returns {Buffer}
  */
 export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
@@ -47,6 +48,7 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
 
   doc.heading('Numbers (median of runs)');
   doc.line('Each case column is the median of its runs. CPU is main-thread; memory is the avg of the last 60s of the phase.', 8);
+  doc.line(P95_NOTE, 8);
   doc.line('FCP/LCP/TTFB are page-load web vitals read on the TV; n/a where the browser emits no paint/LCP timing.', 8);
   doc.gap(4);
   /** @type {import('./pdf.js').Column[]} */
@@ -54,9 +56,15 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
   /** @type {string[][]} */
   const numRows = [
     ['Home CPU % (main-thread)', ...keys.map((k) => summary.cases[k].homeCpu.toFixed(2))],
+    ['Home CPU p95 %', ...keys.map((k) => summary.cases[k].homeCpuP95.toFixed(2))],
     ['Home memory (MB)', ...keys.map((k) => summary.cases[k].homeMem.toFixed(1))],
+    ['Home memory p95 (MB)', ...keys.map((k) => summary.cases[k].homeMemP95.toFixed(1))],
+    ['Home memory peak (MB)', ...keys.map((k) => summary.cases[k].homeMemPeak.toFixed(1))],
     ['Playback CPU % (main-thread)', ...keys.map((k) => summary.cases[k].playCpu.toFixed(2))],
+    ['Playback CPU p95 %', ...keys.map((k) => summary.cases[k].playCpuP95.toFixed(2))],
     ['Playback memory (MB)', ...keys.map((k) => summary.cases[k].playMem.toFixed(1))],
+    ['Playback memory p95 (MB)', ...keys.map((k) => summary.cases[k].playMemP95.toFixed(1))],
+    ['Playback memory peak (MB)', ...keys.map((k) => summary.cases[k].playMemPeak.toFixed(1))],
     [`FCP (ms)${summary.vitalsProxy ? ' *' : ''}`, ...keys.map((k) => orNa(summary.cases[k].fcp))],
     [`LCP (ms)${summary.vitalsProxy ? ' *' : ''}`, ...keys.map((k) => orNa(summary.cases[k].lcp))],
     ['TTFB (ms)', ...keys.map((k) => orNa(summary.cases[k].ttfb))],
@@ -110,17 +118,8 @@ export function buildReportPdf({ summary, byCase, caseDefs, meta }) {
   doc.table(prCols, prRows);
 
   doc.title('Tools & method');
-  doc.heading('Tools used');
-  /** @type {import('./pdf.js').Column[]} */
-  const toolCols = [['Metric', 200], ['Source', 360]];
-  /** @type {import('./pdf.js').TableRow[]} */
-  const toolRows = [
-    ['CPU (main-thread)', 'CDP Performance.getMetrics TaskDuration, delta / wall per 5s sample'],
-    ['Memory', 'CDP Performance.getMetrics JSHeapUsedSize, avg of last 60s of phase'],
-    ['FCP / LCP / TTFB', 'In-page performance entries (paint, largest-contentful-paint, navigation) read over CDP'],
-    ['Attach', `${meta.platform} remote debugging over CDP`],
-  ];
-  doc.table(toolCols, toolRows);
+  doc.heading('Measurement tools');
+  doc.table(TOOL_COLS, toolRows(meta, meta.tools ?? { script: 'perf-e2e.js', vizbee: true, vitals: true, video: false }));
 
   doc.heading('Method');
   for (const s of [

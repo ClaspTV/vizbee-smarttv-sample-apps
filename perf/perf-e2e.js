@@ -14,6 +14,8 @@ import { summarize, textTable } from './lib/report.js';
 import { buildReportPdf } from './lib/pdf-report.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
 import { findAdb, Phone, phoneSerial } from './lib/phone.js';
+import { resultDir, caseSlugs } from './lib/constants.js';
+import { writeExternalAfterRun } from './lib/external.js';
 
 /**
  * End-to-end perf run. Vizio is validated; webOS/Tizen share the code path but
@@ -60,19 +62,6 @@ async function main() {
   if (has('--check')) return;
 
   const runDate = new Date().toISOString().slice(0, 10);
-  const outRoot =
-    process.env.PERF_OUT_DIR ??
-    path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      'perf-results',
-      `vizbee-sdk-perf-${runDate}`,
-      platform.key,
-    );
-  fs.mkdirSync(outRoot, { recursive: true });
-  const raw = fs.createWriteStream(path.join(outRoot, 'samples.jsonl'), { flags: 'a' });
-  /** @param {Record<string, unknown>} rec */
-  const writeSample = (rec) => raw.write(JSON.stringify(rec) + '\n');
-
   const pkgFor = (/** @type {import('./lib/cases.js').Case} */ c) => (c.withVizbee ? pkg : '');
   const caseArg = argVal('--cases');
   /** @type {import('./lib/cases.js').Case[]} */
@@ -90,6 +79,16 @@ async function main() {
     cases = [CASES.without, { ...CASES.nosender, npmPackage: pkg }];
     if (withSender) cases.push({ ...CASES.sender, npmPackage: pkg });
   }
+
+  const outRoot = resultDir({
+    root: path.dirname(fileURLToPath(import.meta.url)),
+    cases: caseSlugs(cases.map((c) => c.key)),
+    platform: platform.key,
+  });
+  fs.mkdirSync(outRoot, { recursive: true });
+  const raw = fs.createWriteStream(path.join(outRoot, 'samples.jsonl'), { flags: 'a' });
+  /** @param {Record<string, unknown>} rec */
+  const writeSample = (rec) => raw.write(JSON.stringify(rec) + '\n');
 
   // Sender phone (adb). The demo app is stopped for the other cases so it cannot
   // auto-reconnect to the TV and contaminate them.
@@ -182,7 +181,24 @@ async function main() {
   }
   if (device) fs.writeFileSync(path.join(outRoot, 'device.json'), JSON.stringify(device, null, 2));
 
-  fs.writeFileSync(path.join(outRoot, 'results.json'), JSON.stringify({ cases: s.cases, costs: s.costs }, null, 2));
+  const hasSender = cases.some((c) => c.sender);
+  fs.writeFileSync(
+    path.join(outRoot, 'results.json'),
+    JSON.stringify(
+      {
+        kind: 'e2e',
+        platform: platform.label,
+        date: runDate,
+        sdkVariant: `${pkg} (elementless npm)`,
+        device,
+        cases: s.cases,
+        costs: s.costs,
+        vitalsProxy: s.vitalsProxy,
+      },
+      null,
+      2,
+    ),
+  );
   fs.writeFileSync(path.join(outRoot, 'summary.md'), `# Vizbee SDK perf (${platform.label})\n\n\`\`\`\n${table}\n\`\`\`\n`);
   fs.writeFileSync(
     path.join(outRoot, 'report.pdf'),
@@ -190,9 +206,19 @@ async function main() {
       summary: s,
       byCase,
       caseDefs: CASES,
-      meta: { platform: platform.label, date: runDate, device, homeMs: HOME_MS, playMs: PLAY_MS },
+      meta: {
+        platform: platform.label,
+        date: runDate,
+        device,
+        homeMs: HOME_MS,
+        playMs: PLAY_MS,
+        sdkVariant: `${pkg} (elementless npm)`,
+        phone: hasSender ? 'Android (adb)' : null,
+        tools: { script: 'perf-e2e.js', vizbee: true, vitals: true, video: false, phone: hasSender },
+      },
     }),
   );
+  writeExternalAfterRun(outRoot, { platform: platform.label });
   console.log(`\nresults: ${outRoot}`);
 }
 

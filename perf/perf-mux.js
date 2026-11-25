@@ -23,6 +23,8 @@ import { runCase } from './lib/runner.js';
 import { summarize, textTable } from './lib/report.js';
 import { buildReportPdf } from './lib/pdf-report.js';
 import { captureDeviceInfo } from './lib/deviceinfo.js';
+import { resultDir, caseSlugs } from './lib/constants.js';
+import { writeExternalAfterRun } from './lib/external.js';
 
 const IP = process.env.VIZIO_IP ?? '10.0.0.141';
 const RUNS = Number(process.env.PERF_RUNS ?? 3);
@@ -39,9 +41,10 @@ function argVal(flag) {
 const has = (/** @type {string} */ f) => process.argv.includes(f);
 
 // Reuse the without/nosender keys so summarize() reports costs.sdk = Mux cost.
+/** @type {Record<'without' | 'nosender', import('./lib/cases.js').Case>} */
 const MUX_CASES = {
-  without: { key: 'without', label: 'Without Mux' },
-  nosender: { key: 'nosender', label: 'With Mux' },
+  without: { key: 'without', label: 'Without Mux', withVizbee: false, npmPackage: '', sender: false },
+  nosender: { key: 'nosender', label: 'With Mux', withVizbee: false, npmPackage: '', sender: false },
 };
 
 async function main() {
@@ -66,9 +69,11 @@ async function main() {
   if (has('--check')) return;
 
   const runDate = new Date().toISOString().slice(0, 10);
-  const outRoot =
-    process.env.PERF_OUT_DIR ??
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'perf-results', `mux-perf-${runDate}`, platform.key);
+  const outRoot = resultDir({
+    root: path.dirname(fileURLToPath(import.meta.url)),
+    cases: caseSlugs(['without', 'nosender'], { mux: true }),
+    platform: platform.key,
+  });
   fs.mkdirSync(outRoot, { recursive: true });
   const raw = fs.createWriteStream(path.join(outRoot, 'samples.jsonl'), { flags: 'a' });
   /** @param {Record<string, unknown>} rec */
@@ -128,7 +133,14 @@ async function main() {
     : null;
   if (device) fs.writeFileSync(path.join(outRoot, 'device.json'), JSON.stringify(device, null, 2));
 
-  fs.writeFileSync(path.join(outRoot, 'results.json'), JSON.stringify({ cases: s.cases, costs: s.costs }, null, 2));
+  fs.writeFileSync(
+    path.join(outRoot, 'results.json'),
+    JSON.stringify(
+      { kind: 'mux', platform: platform.label, date: runDate, muxEnvKey: Boolean(MUX_ENV_KEY), device, cases: s.cases, costs: s.costs, vitalsProxy: s.vitalsProxy },
+      null,
+      2,
+    ),
+  );
   fs.writeFileSync(path.join(outRoot, 'summary.md'), `# Mux perf (${platform.label})\n\n\`\`\`\n${table}\n\`\`\`\n`);
   fs.writeFileSync(
     path.join(outRoot, 'report.pdf'),
@@ -148,9 +160,12 @@ async function main() {
           'Phases: home page idle, then video playback started by a deep link.',
         ],
         sdkCostLabel: 'Mux cost  (with Mux - without Mux, paired per video)',
+        muxEnvKey: Boolean(MUX_ENV_KEY),
+        tools: { script: 'perf-mux.js', mux: true, vitals: true, video: false },
       },
     }),
   );
+  writeExternalAfterRun(outRoot, { platform: platform.label });
   console.log(`\nresults: ${outRoot}`);
 }
 

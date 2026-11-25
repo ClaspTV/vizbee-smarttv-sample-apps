@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cpuPercent, lastWindowAvg } from '../lib/metrics.js';
-import { median, pairedCost, phaseMetrics } from '../lib/report.js';
+import { median, p95, pairedCost, phaseMetrics } from '../lib/report.js';
 
 /** @param {Partial<import('../lib/metrics.js').Sample>} p @returns {import('../lib/metrics.js').Sample} */
 const S = (p) => ({ t: 0, taskDuration: 0, jsHeapUsed: 0, jsHeapTotal: 0, nodes: 0, listeners: 0, ...p });
@@ -55,4 +55,24 @@ test('pairedCost subtracts per-run same-video, then medians', () => {
 test('phaseMetrics reports mem in MB from last window', () => {
   const m = phaseMetrics([S({ t: 0, jsHeapUsed: 8e6 }), S({ t: 1000, jsHeapUsed: 8e6 })]);
   assert.equal(m.memMB, 8);
+});
+
+test('p95 is nearest-rank, null on empty', () => {
+  assert.equal(p95([]), null);
+  assert.equal(p95([5]), 5);
+  // 1..100 sorted: ceil(0.95*100)-1 = 94 -> the 95th value
+  assert.equal(p95(Array.from({ length: 100 }, (_, i) => i + 1)), 95);
+  // ignores non-finite
+  assert.equal(p95([1, 2, null, undefined, NaN, 3]), 3);
+});
+
+test('phaseMetrics reports cpu/mem p95 and peak over the phase', () => {
+  const m = phaseMetrics([
+    S({ t: 0, jsHeapUsed: 5e6 }),
+    S({ t: 1000, jsHeapUsed: 9e6, taskDuration: 0.1 }),
+    S({ t: 2000, jsHeapUsed: 7e6, taskDuration: 0.2 }),
+  ]);
+  assert.equal(m.memPeakMB, 9); // max sample
+  assert.ok(m.memP95MB >= 7 && m.memP95MB <= 9);
+  assert.ok(typeof m.cpuP95 === 'number');
 });

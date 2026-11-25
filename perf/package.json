@@ -13,6 +13,7 @@
     "deep": "node perf-deep.js",
     "findings": "node perf-findings.js",
     "report": "node perf-report.js",
+    "external": "node perf-external.js",
     "all": "node perf-all.js"
   },
   "devDependencies": {

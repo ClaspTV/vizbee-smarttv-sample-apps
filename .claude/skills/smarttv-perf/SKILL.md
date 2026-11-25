@@ -137,7 +137,7 @@ also in `src/data/videos.ts` so the `#/player/<id>` deep-link resolves): WWDC 20
 (34 min) primary, WWDC 2017 (103 min) fallback. `--dry-run` ≈ 5 min; `--report <dir>`
 rebuilds report.pdf/summary.md **and analysis.pdf/issues.pdf** from `results.json`.
 Default platform is **webos**.
-Output: `perf-results/vizbee-sdk-long-<date>/<platform>/`.
+Output: `perf-results/<cases>_<platform>_<mmddyyyy>/` (e.g. `vizbee-sender+mux+no-vizbee_webos_11252026`, plus `_dry-run`; a name already taken gets `-2`, `-3`).
 
 Options (env / flags):
 - `--platform vizio|webos|tizen` (default vizio; perf-long defaults to webos)  ·  `--es6` (ES6 module)  ·  `--sender` (adds the sender case)  ·  `--mux` (baseline · Only Mux · Vizbee+sender three-way; with `MUX_ENV_KEY`)  ·  `--cases k,k` (subset of `without,nosender,sender,mux`)  ·  `--disc-idle S` (sender return-to-normal home phase after disconnect, default 120)  ·  `--allow-reload` (run even if the PERF_HOOKS in-page hook is missing — not recommended)
@@ -150,11 +150,12 @@ Options (env / flags):
 
 ## 3. Outputs
 
-Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningful, per-platform):
-- `report.pdf` — a **Device & run** table at the top (model, firmware/OS, board, screen, SDK variant, run date), then numbers (metric × case + costs), per-run table, tools used, method
+Written to `perf/perf-results/<cases>_<platform>_<mmddyyyy>/` (e.g. `no-vizbee+vizbee+vizbee-sender_vizio_11252026`; the SDK measured and run counts are in the report header, not the name; a name already taken gets `-2`, `-3`):
+- `report.pdf` — a **Device & run** table at the top (model, firmware/OS, board, screen, SDK variant, run date), then numbers (metric × case + costs — each of CPU and memory reported as **average, p95 and peak**, home and playback), per-run table, a per-metric **Measurement tools** table (each metric → the CDP source → engine), method
 - `device.json` — captured device details (Vizio over CDP, webOS via `ares-device -i`, Tizen via `sdb capability`); the report reads this; edit it to correct/add fields
-- `summary.md`, `results.json` — same numbers
-- `samples.jsonl` — every raw sample incl. the `vitals` phase (rebuild any report: `node perf-report.js <dir>` — it reads `device.json` and derives the run date from sample timestamps)
+- `summary.md`, `results.json` — same numbers (`results.json` now also carries `kind` and `sdkVariant` so a rebuild/external pass can classify the run)
+- `external/` — the **shareable** subset (see §3b)
+- `samples.jsonl` — every raw sample incl. the `vitals` phase (rebuild any report: `node perf-report.js <dir>` — it reads `device.json`, derives the run date from sample timestamps, and also rewrites `external/`)
 - `deep/cpu.pdf`, `deep/memory.pdf` (+ cpu.json, heap.json)
 - `analysis.pdf` (by criticality), `issues.pdf` (by metric) — from a `findings.json`
   you add to the run dir (see `perf/findings.example.json`); then `node perf-findings.js <dir>`.
@@ -164,6 +165,18 @@ Written to `perf/perf-results/vizbee-sdk-perf-<run-date>/<platform>/` (meaningfu
   pointing at `perf-deep.js` to localise. A hand-written `findings.json` in the dir
   overrides the draft (then re-run `node perf-findings.js <dir>`). Thresholds live in
   `perf/lib/long-findings.js`.
+
+### 3b. Sharing with a customer: `<run dir>/external/`
+
+Every run (and every `--report` rebuild) also writes `external/`; **share only that
+folder, never the run folder.** It carries:
+- `report.pdf`, `summary.md` — the report with internal details removed: no local
+  paths, no device IP/serial, no runner internals; the SDK shows as `--sdk-label`
+- `comparison.csv` — the report's main table (phase, metric, unit, each case, cost columns), for pasting into a sheet
+- `data/samples-<case>.csv` (every 5 s sample: phase, JS heap, DOM nodes), `data/results.json`, `data/README.txt`
+- Left out on purpose: `samples.jsonl`, `device.json`, builds, findings/analysis/issues (internal review)
+- SDK label: defaults to the SDK variant string; override with `--sdk-label "<label>"` on the run, or `node perf-external.js <run dir> --sdk-label "<label>"` to redo it for an old run
+- The write **fails (and names the file)** if an IP, local path or branch name is left in a text file (`lib/external.js` `INTERNAL`)
 
 ## 4. Platforms & the sender case
 

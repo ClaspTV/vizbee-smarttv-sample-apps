@@ -13,7 +13,10 @@ import {
   stopHeapSampling,
   forceGc,
 } from './metrics.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
+import { p95 } from './report.js';
 
 /**
  * Long run: one served build per case, a long home page, then several long
@@ -34,7 +37,9 @@ import { INTERVAL_MS, MARKER_TIMEOUT_MS, MEM_WINDOW_MS } from './constants.js';
  *
  * @typedef {{
  *   cpu: number,
+ *   cpuP95: number,
  *   usedEndMB: number,
+ *   usedP95MB: number,
  *   usedPeakMB: number,
  *   slopeMBMin: number,
  *   allocMB: number,
@@ -116,8 +121,11 @@ export function phaseStats(samples) {
   const cpus = [];
   for (let i = 1; i < samples.length; i++) cpus.push(cpuPercent(samples[i - 1], samples[i]));
   const cpu = cpus.length ? cpus.reduce((a, b) => a + b, 0) / cpus.length : 0;
+  const cpuP95 = p95(cpus) ?? 0;
+  const memsMB = samples.map((s) => s.jsHeapUsed / 1e6);
   const usedEndMB = lastWindowAvg(samples, (s) => s.jsHeapUsed, MEM_WINDOW_MS) / 1e6;
-  const usedPeakMB = samples.length ? Math.max(...samples.map((s) => s.jsHeapUsed)) / 1e6 : 0;
+  const usedP95MB = p95(memsMB) ?? 0;
+  const usedPeakMB = memsMB.length ? Math.max(...memsMB) : 0;
   const t0 = samples.length ? samples[0].t : 0;
   const mins = samples.map((s) => (s.t - t0) / 60000);
   const slopeMBMin = slope(mins, samples.map((s) => s.jsHeapUsed / 1e6));
@@ -125,7 +133,9 @@ export function phaseStats(samples) {
   const secs = last ? (last.t - t0) / 1000 : 0;
   return {
     cpu,
+    cpuP95,
     usedEndMB,
+    usedP95MB,
     usedPeakMB,
     slopeMBMin,
     allocMB: 0,
@@ -145,6 +155,7 @@ export function phaseStats(samples) {
  * @param {{
  *   idle: number, play: number, plays: number, after: number, warmup: number,
  *   video: string, fallbacks: string[], videos: Record<string, LongVideo>,
+ *   rotate?: string[] | null,
  *   phone?: import('./phone.js').Phone | null, tvName?: string, allowReload?: boolean,
  *   discIdle?: number
  * }} p.o
@@ -297,6 +308,10 @@ export async function runLongCase({ dev, url, case_, o, log, writeSample, onProg
   for (let n = 1; n <= o.plays; n++) {
     /** @type {string[]} */
     const notes = [];
+    if (o.rotate && o.rotate.length) {
+      video = o.rotate[(n - 1) % o.rotate.length];
+      r.video = video;
+    }
     const tp = await startPlayback(notes);
     const vstSecs = (Date.now() - tp) / 1000;
     const vitals = await captureWebVitals(cdp);
@@ -375,4 +390,63 @@ export function playLine(p, videos) {
     (p.after ? ` | after: ${phaseLine(p.after)}` : '') +
     (p.notes.length ? ` | ${p.notes.join('; ')}` : '')
   );
+}
+
+/**
+ * Add CPU p95 and memory p95 to a long run's PhaseResults that were saved before
+ * those fields existed, recomputed from the run folder's samples.jsonl (tagged
+ * per case and phase: home / play-N / after-N / disconnected). Only fills a
+ * field that is missing, so a fresh run (which already has them) is untouched.
+ * CPU p95 is left as-is where the per-sample CPU series is degenerate (TaskDuration
+ * absent, e.g. webOS 4, where CPU came from the Profiler domain, not the samples).
+ * @param {string} dir run folder
+ * @param {Record<string, CaseResult>} results
+ * @returns {Record<string, CaseResult>}
+ */
+export function backfillLongP95(dir, results) {
+  const file = path.join(dir, 'samples.jsonl');
+  if (!fs.existsSync(file)) return results;
+  /** @type {Map<string, Sample[]>} key `${case}|${phase}` */
+  const byTag = new Map();
+  for (const ln of fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)) {
+    /** @type {any} */ let r;
+    try {
+      r = JSON.parse(ln);
+    } catch {
+      continue;
+    }
+    if (typeof r.jsHeapUsed !== 'number' || !r.case || !r.phase) continue;
+    const key = `${r.case}|${r.phase}`;
+    if (!byTag.has(key)) byTag.set(key, []);
+    /** @type {Sample[]} */ (byTag.get(key)).push(r);
+  }
+  /** @param {Sample[]} ss */
+  const p95Of = (ss) => {
+    /** @type {number[]} */
+    const cpus = [];
+    for (let i = 1; i < ss.length; i++) cpus.push(cpuPercent(ss[i - 1], ss[i]));
+    return {
+      cpuP95: cpus.some((x) => x > 0) ? p95(cpus) ?? undefined : undefined,
+      usedP95MB: p95(ss.map((s) => s.jsHeapUsed / 1e6)) ?? undefined,
+    };
+  };
+  /** @param {string} key @param {import('./long.js').PhaseResult | null | undefined} target */
+  const apply = (key, target) => {
+    if (!target) return;
+    const ss = byTag.get(key);
+    if (!ss || ss.length < 2) return;
+    const p = p95Of(ss);
+    if (target.cpuP95 === undefined && p.cpuP95 !== undefined) target.cpuP95 = p.cpuP95;
+    if (target.usedP95MB === undefined && p.usedP95MB !== undefined) target.usedP95MB = p.usedP95MB;
+  };
+  for (const [k, c] of Object.entries(results)) {
+    if (!c) continue;
+    apply(`${k}|home`, c.home);
+    for (const pl of c.plays) {
+      apply(`${k}|play-${pl.n}`, pl.play);
+      apply(`${k}|after-${pl.n}`, pl.after);
+    }
+    if (c.disconnected) apply(`${k}|disconnected`, c.disconnected);
+  }
+  return results;
 }

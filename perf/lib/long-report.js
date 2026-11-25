@@ -4,7 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pdfDoc } from './pdf.js';
-import { median } from './report.js';
+import { median, p95, P95_NOTE } from './report.js';
+import { TOOL_COLS, toolRows } from './tools.js';
 
 /**
  * Report of a long run (perf-long.js): report.pdf, summary.md, results.json.
@@ -56,22 +57,29 @@ function delta(a, b, d) {
 const ROWS = /** @type {Array<[string, string, number, ((c: CaseResult) => number | null) | null, string]>} */ ([
   ['Home page', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => (c.home ? c.home.cpu : null), 'cpu'],
-  ['Memory used', 'MB', 1, (c) => (c.home ? c.home.usedEndMB : null), 'mem'],
+  ['CPU p95', '%', 2, (c) => (c.home ? c.home.cpuP95 ?? null : null), 'cpu'],
+  ['Memory used (average)', 'MB', 1, (c) => (c.home ? c.home.usedEndMB : null), 'mem'],
+  ['Memory p95', 'MB', 1, (c) => (c.home ? c.home.usedP95MB ?? null : null), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => (c.home ? c.home.allocMB : null), 'alloc'],
   ['Heap slope', 'MB/min', 2, (c) => (c.home ? c.home.slopeMBMin : null), 'mem'],
   ['DOM nodes', '', 0, (c) => (c.home ? c.home.nodes : null), 'nodes'],
   ['Playback (median of the playbacks)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => p.play.cpu)), 'cpu'],
-  ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedEndMB)), 'mem'],
+  ['CPU p95', '%', 2, (c) => med(c.plays.map((p) => p.play.cpuP95)), 'cpu'],
+  ['Memory used (average)', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedEndMB)), 'mem'],
+  ['Memory p95', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedP95MB)), 'mem'],
   ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => p.play.usedPeakMB)), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => p.play.allocMB)), 'alloc'],
   ['Heap slope (leak signal)', 'MB/min', 2, (c) => med(c.plays.map((p) => p.play.slopeMBMin)), 'mem'],
   ['DOM nodes', '', 0, (c) => med(c.plays.map((p) => p.play.nodes)), 'nodes'],
-  ['Video start time (VST)', 's', 2, (c) => med(c.plays.map((p) => p.vstSecs)), 'vst'],
+  ['Video start time (VST) median', 's', 2, (c) => med(c.plays.map((p) => p.vstSecs)), 'vst'],
+  ['Video start time (VST) p95', 's', 2, (c) => p95(c.plays.map((p) => p.vstSecs)), 'vst'],
   ['Dropped frames', '%', 2, (c) => droppedPctFor(c.plays), 'frames'],
   ['Home page after each playback (median, all idle metrics)', '', 0, null, ''],
   ['CPU average', '%', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.cpu : null))), 'cpu'],
-  ['Memory used', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedEndMB : null))), 'mem'],
+  ['CPU p95', '%', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.cpuP95 : null))), 'cpu'],
+  ['Memory used (average)', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedEndMB : null))), 'mem'],
+  ['Memory p95', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedP95MB : null))), 'mem'],
   ['Memory peak', 'MB', 1, (c) => med(c.plays.map((p) => (p.after ? p.after.usedPeakMB : null))), 'mem'],
   ['Memory allocated', 'MB', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.allocMB : null))), 'alloc'],
   ['Heap slope', 'MB/min', 2, (c) => med(c.plays.map((p) => (p.after ? p.after.slopeMBMin : null))), 'mem'],
@@ -242,7 +250,7 @@ export function disconnectVerdict(r) {
  * Main table rows: a group heading, or { label, unit, <case values...>, sdkCost, senderCost }.
  * @param {LongResults} r
  */
-function longTable(r) {
+export function longTable(r) {
   const cases = presentCases(r);
   const costs = costDefs(cases);
   const { cpuAvailable, memReliable, allocAvailable, framesAvailable } = capability(r);
@@ -309,6 +317,8 @@ function notesFor(meta, r, videos) {
     'One app session per case: after a single boot, phases move home <-> player through the app router (in-page, no reload), so the JS heap carries across playbacks like the Roku long run. Leak signals: the per-playback heap slope (MB/min) and the memory-by-playback progression below. If the __PERF_HOOKS__ build hook is absent the run falls back to full reloads between phases (noted per case) and only the within-playback slope is meaningful',
     costNote,
     'CPU average: main-thread busy fraction - Performance.getMetrics TaskDuration where available, else the Profiler domain (idle-excluded sampling, used on webOS 4). Memory used = average of the last 60 s of each phase (JSHeapUsedSize); peak = max over the phase',
+    P95_NOTE,
+    `VST p95: over the ${meta.plays} playbacks of a case; with this few playbacks it is close to the slowest one`,
     'Heap slope: least-squares slope of JSHeapUsedSize over the whole phase, in MB/min - a steady positive playback slope is the leak signal (retained heap; n/a where unavailable)',
     'Memory allocated: total bytes allocated during the phase via the HeapProfiler sampling profiler - an allocation / churn signal, not retained heap; on webOS 4 it is the only available memory metric',
     'Video start time (VST): deep-link navigate -> video playing (polled over CDP), wall clock',
@@ -355,49 +365,6 @@ function notesFor(meta, r, videos) {
 }
 
 /**
- * Per-metric tool / source actually used, inferred from what the engine
- * provided (memReliable => the CDP Performance domain was present).
- * @param {LongResults} r
- * @returns {string[][]}
- */
-function toolsFor(r) {
-  const { cpuAvailable, memReliable, allocAvailable, framesAvailable } = capability(r);
-  return [
-    [
-      'CPU average',
-      cpuAvailable
-        ? memReliable
-          ? 'CDP Performance.getMetrics - TaskDuration delta / wall'
-          : 'CDP Profiler domain - sampling profile, idle-excluded busy %'
-        : 'n/a',
-    ],
-    [
-      'Memory used / peak',
-      memReliable
-        ? 'CDP Performance.getMetrics - JSHeapUsedSize'
-        : 'n/a - performance.memory stubbed, Runtime.getHeapUsage absent (webOS 4)',
-    ],
-    [
-      'Heap slope (leak signal)',
-      memReliable ? 'JSHeapUsedSize least-squares slope over the phase' : 'n/a - needs retained heap',
-    ],
-    [
-      'Memory allocated',
-      allocAvailable
-        ? 'CDP HeapProfiler - sampling allocation profiler (bytes/phase)'
-        : 'n/a',
-    ],
-    ['Video start time (VST)', 'CDP Page.navigate -> poll video.readyState>=2 & currentTime>0'],
-    [
-      'Dropped frames',
-      framesAvailable
-        ? 'HTMLVideoElement.getVideoPlaybackQuality() - droppedVideoFrames / totalVideoFrames'
-        : 'n/a',
-    ],
-  ];
-}
-
-/**
  * Write report.pdf, summary.md, results.json; return the markdown.
  * @param {string} outDir
  * @param {any} meta
@@ -410,7 +377,15 @@ export function writeLongReport(outDir, meta, r, videos) {
   const table = longTable(r);
   const rows = playRows(r, videos);
   const notes = notesFor(meta, r, videos);
-  const tools = toolsFor(r);
+  const tools = toolRows(meta, {
+    script: 'perf-long.js',
+    vizbee: cases.some(([k]) => k === 'nosender' || k === 'sender'),
+    mux: cases.some(([k]) => k === 'mux'),
+    phone: !!(r.sender && r.sender.plays.length),
+    video: true,
+    vitals: false,
+    external: !!meta.external,
+  });
   const mins = (/** @type {number} */ s) => (s >= 60 ? `${+(s / 60).toFixed(1)} min` : `${s}s`);
   const title = 'Vizbee JS SDK - long playback (smart TV)';
   const dev = meta.device || {};
@@ -462,7 +437,7 @@ export function writeLongReport(outDir, meta, r, videos) {
   }
   doc.gap(10);
   doc.heading('Measurement tools');
-  doc.table([['Metric', 170], ['Tool / source', 550]], tools);
+  doc.table(TOOL_COLS, tools);
   doc.gap(10);
   doc.heading('Notes');
   notes.forEach((s) => doc.para('- ' + s));
@@ -490,7 +465,7 @@ export function writeLongReport(outDir, meta, r, videos) {
     md += mdRow(dhead) + mdSep(dhead.length) + disc.rows.map(mdRow).join('');
     if (discVerdict) md += `\n- ${discVerdict}\n`;
   }
-  md += '\n## Measurement tools\n\n' + mdRow(['Metric', 'Tool / source']) + mdSep(2) + tools.map(mdRow).join('');
+  md += '\n## Measurement tools\n\n' + mdRow(TOOL_COLS.map((c) => c[0])) + mdSep(TOOL_COLS.length) + tools.map(mdRow).join('');
   md += `\n## Notes\n\n${notes.map((s) => `- ${s}`).join('\n')}\n`;
   if (runNotes.length) md += `\n## Run notes\n\n${runNotes.join('\n')}\n`;
   fs.writeFileSync(path.join(outDir, 'summary.md'), md);

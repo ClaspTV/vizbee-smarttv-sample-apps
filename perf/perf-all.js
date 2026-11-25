@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mmddyyyy } from './lib/constants.js';
 
 /**
  * Full run into one folder: perf-e2e (numbers + report.pdf), then perf-deep
@@ -14,9 +15,14 @@ import { fileURLToPath } from 'node:url';
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** @returns {string} */
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+/** perf-results/all_<platform>_<mmddyyyy>, deduped with -2, -3, ... */
+function outFolder() {
+  const i = FLAGS.indexOf('--platform');
+  const platform = i >= 0 ? FLAGS[i + 1] : 'vizio';
+  const base = path.join(HERE, 'perf-results', `all_${platform}_${mmddyyyy()}`);
+  let dir = base;
+  for (let n = 2; fs.existsSync(dir); n++) dir = `${base}-${n}`;
+  return dir;
 }
 
 /** @param {string} script @param {string[]} args @param {NodeJS.ProcessEnv} [env] */
@@ -33,7 +39,7 @@ function run(script, args, env) {
 const FLAGS = process.argv.slice(2);
 
 function main() {
-  const outDir = path.join(HERE, 'perf-results', stamp());
+  const outDir = outFolder();
   fs.mkdirSync(outDir, { recursive: true });
   console.log(`=== perf-all -> ${outDir} ===`);
 

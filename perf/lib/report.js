@@ -51,11 +51,12 @@ export function loadRuns(jsonlPath) {
 /**
  * @typedef {import('./metrics.js').Sample} Sample
  * @typedef {import('./runner.js').RunResult} RunResult
- * @typedef {{ cpu: number, memMB: number }} PhaseMetric
+ * @typedef {{ cpu: number, cpuP95: number, memMB: number, memP95MB: number, memPeakMB: number }} PhaseMetric
  */
 
 /**
- * Per-phase metrics for one run: avg main-thread CPU, memory over the last 60s.
+ * Per-phase metrics for one run: average and p95 main-thread CPU, memory over
+ * the last 60s (steady), memory p95 and peak over the whole phase.
  * @param {Sample[]} samples
  * @returns {PhaseMetric}
  */
@@ -64,8 +65,12 @@ export function phaseMetrics(samples) {
   const cpus = [];
   for (let i = 1; i < samples.length; i++) cpus.push(cpuPercent(samples[i - 1], samples[i]));
   const cpu = cpus.length ? cpus.reduce((a, b) => a + b, 0) / cpus.length : 0;
+  const cpuP95 = p95(cpus) ?? 0;
   const memMB = lastWindowAvg(samples, (s) => s.jsHeapUsed, MEM_WINDOW_MS) / 1e6;
-  return { cpu, memMB };
+  const mems = samples.map((s) => s.jsHeapUsed / 1e6);
+  const memP95MB = p95(mems) ?? 0;
+  const memPeakMB = mems.length ? Math.max(...mems) : 0;
+  return { cpu, cpuP95, memMB, memP95MB, memPeakMB };
 }
 
 /** @param {number[]} nums @returns {number} */
@@ -75,6 +80,26 @@ export function median(nums) {
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
+
+/**
+ * 95th percentile, nearest rank: the value 95% of the samples are at or below.
+ * With few samples it is (close to) the largest one. Null when empty.
+ * @param {(number | null | undefined)[]} nums
+ * @returns {number | null}
+ */
+export function p95(nums) {
+  const v = /** @type {number[]} */ (nums.filter((n) => typeof n === 'number' && isFinite(n))).sort((a, b) => a - b);
+  return v.length ? v[Math.max(0, Math.ceil(0.95 * v.length) - 1)] : null;
+}
+
+/** p95 over per-run values, or null. @param {(number | null | undefined)[]} nums */
+export function p95OrNull(nums) {
+  return p95(nums);
+}
+
+/** The phrase explaining average / p95 / peak, shared by every report. */
+export const P95_NOTE =
+  'Average = steady cost (memory: avg of the last 60s of the phase); p95 = 95% of the 5s samples in the phase are at or below it (bursts); peak = highest sample.';
 
 /** @param {(number | null | undefined)[]} nums @returns {number | null} */
 export function medianOrNull(nums) {
@@ -86,7 +111,7 @@ export function medianOrNull(nums) {
  * Build the numbers table: per-case medians + paired SDK/sender cost.
  * @param {Record<string, RunResult[]>} byCase
  * @returns {{
- *   cases: Record<string, { homeCpu:number, homeMem:number, playCpu:number, playMem:number, fcp:number|null, lcp:number|null, ttfb:number|null, n:number }>,
+ *   cases: Record<string, { homeCpu:number, homeCpuP95:number, homeMem:number, homeMemP95:number, homeMemPeak:number, playCpu:number, playCpuP95:number, playMem:number, playMemP95:number, playMemPeak:number, fcp:number|null, lcp:number|null, ttfb:number|null, n:number }>,
  *   costs: { sdk?: PairedCost, sender?: PairedCost },
  *   vitalsProxy: boolean
  * }}
@@ -104,9 +129,15 @@ export function summarize(byCase) {
     };
     cases[key] = {
       homeCpu: median(perRun[key].home.map((m) => m.cpu)),
+      homeCpuP95: median(perRun[key].home.map((m) => m.cpuP95)),
       homeMem: median(perRun[key].home.map((m) => m.memMB)),
+      homeMemP95: median(perRun[key].home.map((m) => m.memP95MB)),
+      homeMemPeak: median(perRun[key].home.map((m) => m.memPeakMB)),
       playCpu: median(perRun[key].play.map((m) => m.cpu)),
+      playCpuP95: median(perRun[key].play.map((m) => m.cpuP95)),
       playMem: median(perRun[key].play.map((m) => m.memMB)),
+      playMemP95: median(perRun[key].play.map((m) => m.memP95MB)),
+      playMemPeak: median(perRun[key].play.map((m) => m.memPeakMB)),
       fcp: medianOrNull(runs.map((r) => r.vitals?.fcp)),
       lcp: medianOrNull(runs.map((r) => r.vitals?.lcp)),
       ttfb: medianOrNull(runs.map((r) => r.vitals?.ttfb)),
@@ -157,21 +188,32 @@ export function pairedCost(a, b) {
 }
 
 /**
+ * @typedef {ReturnType<typeof summarize>['cases'][string]} CaseSummary
+ */
+
+/**
  * Plain-text numbers table for the console / summary.md.
  * @param {ReturnType<typeof summarize>} s
- * @param {Record<string, import('./cases.js').Case>} caseDefs
+ * @param {Record<string, { label?: string }>} caseDefs
  * @returns {string}
  */
 export function textTable(s, caseDefs) {
   const rows = [];
   rows.push('Metric                         ' + Object.keys(s.cases).map((k) => k.padStart(12)).join(''));
+  /** @param {string} label @param {(c: CaseSummary) => string} get */
   const line = (label, get) =>
     label.padEnd(30) + Object.keys(s.cases).map((k) => get(s.cases[k]).padStart(12)).join('');
   const orNa = (/** @type {number|null} */ x) => (x == null ? 'n/a' : x.toFixed(0));
   rows.push(line('Home CPU % (main-thread)', (c) => c.homeCpu.toFixed(2)));
+  rows.push(line('Home CPU p95 %', (c) => c.homeCpuP95.toFixed(2)));
   rows.push(line('Home memory (MB)', (c) => c.homeMem.toFixed(1)));
+  rows.push(line('Home memory p95 (MB)', (c) => c.homeMemP95.toFixed(1)));
+  rows.push(line('Home memory peak (MB)', (c) => c.homeMemPeak.toFixed(1)));
   rows.push(line('Playback CPU % (main-thread)', (c) => c.playCpu.toFixed(2)));
+  rows.push(line('Playback CPU p95 %', (c) => c.playCpuP95.toFixed(2)));
   rows.push(line('Playback memory (MB)', (c) => c.playMem.toFixed(1)));
+  rows.push(line('Playback memory p95 (MB)', (c) => c.playMemP95.toFixed(1)));
+  rows.push(line('Playback memory peak (MB)', (c) => c.playMemPeak.toFixed(1)));
   const px = s.vitalsProxy ? ' *' : '';
   rows.push(line('FCP (ms)' + px, (c) => orNa(c.fcp)));
   rows.push(line('LCP (ms)' + px, (c) => orNa(c.lcp)));
