@@ -23,9 +23,8 @@ else
   echo "  package step skipped (ares-cli not installed)"
 fi
 
-echo "==> Xbox build (staging only — run MakeAppx on Windows to finalize)"
+echo "==> Xbox build (web only — the .msix comes from the Xbox workflow)"
 npx vite build --mode xbox
-bash "$ROOT/scripts/build-xbox.sh"
 
 echo "==> Vizio SmartCast build"
 npx vite build --mode viziosmartcast
